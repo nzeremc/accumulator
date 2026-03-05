@@ -190,26 +190,5 @@ resource "aws_db_instance" "secondary" {
 }
 
 # CloudWatch Log Groups
-resource "aws_cloudwatch_log_group" "primary_postgresql" {
-  name              = "/aws/rds/instance/${aws_db_instance.primary.identifier}/postgresql"
-  retention_in_days = 7
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "${var.project_name}-primary-postgresql-logs"
-    }
-  )
-}
-
-resource "aws_cloudwatch_log_group" "secondary_postgresql" {
-  name              = "/aws/rds/instance/${aws_db_instance.secondary.identifier}/postgresql"
-  retention_in_days = 7
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "${var.project_name}-secondary-postgresql-logs"
-    }
-  )
-}
+# CloudWatch log groups are automatically created by RDS when enabled_cloudwatch_logs_exports is set
+# No need to explicitly create them as resources
