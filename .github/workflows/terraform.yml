@@ -13,34 +13,23 @@ env:
   TF_VERSION: 'latest'
 
 jobs:
-  terraform:
-    name: 'Terraform'
+  terraform-plan:
+    name: 'Terraform Plan'
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     
-    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
     defaults:
       run:
         shell: bash
         working-directory: .
 
+    outputs:
+      aws_region: ${{ steps.tfvars.outputs.aws_region }}
+      tf_state_bucket: ${{ steps.tfvars.outputs.tf_state_bucket }}
+
     steps:
-    # Checkout the repository to the GitHub Actions runner
     - name: Checkout
       uses: actions/checkout@v4
 
-    # Debug: Print working directory and files
-    - name: Debug - Show Directory
-      run: |
-        echo "Current directory: $(pwd)"
-        echo "Files in current directory:"
-        ls -la
-        echo "Checking for terraform.tfvars:"
-        ls -la terraform.tfvars || echo "terraform.tfvars not found"
-
-    # Extract configuration from terraform.tfvars
     - name: Extract Terraform Variables
       id: tfvars
       run: |
@@ -55,7 +44,6 @@ jobs:
           exit 1
         fi
 
-    # Configure AWS credentials
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -63,13 +51,11 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ steps.tfvars.outputs.aws_region }}
 
-    # Install the latest version of Terraform CLI
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ env.TF_VERSION }}
 
-    # Initialize a new or existing Terraform working directory
     - name: Terraform Init
       run: |
         terraform init \
@@ -78,38 +64,100 @@ jobs:
           -backend-config="region=${{ steps.tfvars.outputs.aws_region }}" \
           -backend-config="encrypt=true"
 
-    # Format check
     - name: Terraform Format Check
       run: terraform fmt -check -recursive
       continue-on-error: true
 
-    # Generate and show an execution plan
     - name: Terraform Plan
       id: plan
-      run: terraform plan -var-file="terraform.tfvars" -out=tfplan
-      continue-on-error: false
+      run: |
+        terraform plan -var-file="terraform.tfvars" -out=tfplan
+        terraform show -no-color tfplan > plan-output.txt
 
-    # Save plan for review
     - name: Upload Terraform Plan
       uses: actions/upload-artifact@v4
       with:
         name: terraform-plan
-        path: tfplan
+        path: |
+          tfplan
+          plan-output.txt
         retention-days: 5
 
-    # Apply the Terraform plan (requires manual approval via environment protection)
+    - name: Comment Plan on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const plan = fs.readFileSync('plan-output.txt', 'utf8');
+          const output = `#### Terraform Plan 📋
+          <details><summary>Show Plan</summary>
+          
+          \`\`\`terraform
+          ${plan}
+          \`\`\`
+          
+          </details>
+          
+          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          });
+
+  terraform-apply:
+    name: 'Terraform Apply'
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.terraform-plan.outputs.aws_region }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Terraform Init
+      run: |
+        terraform init \
+          -backend-config="bucket=${{ needs.terraform-plan.outputs.tf_state_bucket }}" \
+          -backend-config="key=docmp/terraform.tfstate" \
+          -backend-config="region=${{ needs.terraform-plan.outputs.aws_region }}" \
+          -backend-config="encrypt=true"
+
+    - name: Download Terraform Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
+
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: terraform apply -auto-approve tfplan
 
-    # Output the results
     - name: Terraform Output
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: terraform output -json > terraform-outputs.json
 
-    # Upload outputs as artifact
     - name: Upload Terraform Outputs
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
         name: terraform-outputs
