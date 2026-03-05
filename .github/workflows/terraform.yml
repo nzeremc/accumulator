@@ -167,7 +167,7 @@ jobs:
   build-db-init-image:
     name: 'Build DB Init Docker Image'
     runs-on: ubuntu-latest
-    needs: terraform
+    needs: terraform-apply
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
