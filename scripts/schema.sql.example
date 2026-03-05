@@ -1,0 +1,229 @@
+-- DOCMP Database Schema Example
+-- This is a sample schema file. Replace with your actual schema.
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Create schemas
+CREATE SCHEMA IF NOT EXISTS app;
+CREATE SCHEMA IF NOT EXISTS audit;
+CREATE SCHEMA IF NOT EXISTS config;
+
+-- Set search path
+SET search_path TO app, public;
+
+-- ============================================
+-- Application Tables
+-- ============================================
+
+-- Users table
+CREATE TABLE IF NOT EXISTS app.users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID
+);
+
+-- Organizations table
+CREATE TABLE IF NOT EXISTS app.organizations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID
+);
+
+-- User Organizations mapping
+CREATE TABLE IF NOT EXISTS app.user_organizations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
+    organization_id UUID NOT NULL REFERENCES app.organizations(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, organization_id)
+);
+
+-- Documents table
+CREATE TABLE IF NOT EXISTS app.documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(500) NOT NULL,
+    document_type VARCHAR(100) NOT NULL,
+    content TEXT,
+    metadata JSONB,
+    organization_id UUID REFERENCES app.organizations(id),
+    status VARCHAR(50) DEFAULT 'draft',
+    version INTEGER DEFAULT 1,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    created_by UUID REFERENCES app.users(id),
+    updated_by UUID REFERENCES app.users(id)
+);
+
+-- Document versions table
+CREATE TABLE IF NOT EXISTS app.document_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID NOT NULL REFERENCES app.documents(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    title VARCHAR(500) NOT NULL,
+    content TEXT,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    created_by UUID REFERENCES app.users(id),
+    UNIQUE(document_id, version)
+);
+
+-- ============================================
+-- Configuration Tables
+-- ============================================
+
+-- System configuration
+CREATE TABLE IF NOT EXISTS config.system_settings (
+    id SERIAL PRIMARY KEY,
+    key VARCHAR(100) NOT NULL UNIQUE,
+    value TEXT,
+    description TEXT,
+    is_encrypted BOOLEAN DEFAULT false,
+    updated_at TIMESTAMP DEFAULT NOW(),
+    updated_by UUID
+);
+
+-- Countries (static data)
+CREATE TABLE IF NOT EXISTS config.countries (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(3) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT true
+);
+
+-- Categories (static data)
+CREATE TABLE IF NOT EXISTS config.categories (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    parent_id INTEGER REFERENCES config.categories(id),
+    is_active BOOLEAN DEFAULT true
+);
+
+-- ============================================
+-- Audit Tables
+-- ============================================
+
+-- Audit log
+CREATE TABLE IF NOT EXISTS audit.audit_log (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    table_name VARCHAR(100) NOT NULL,
+    record_id UUID NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    old_values JSONB,
+    new_values JSONB,
+    changed_by UUID,
+    changed_at TIMESTAMP DEFAULT NOW(),
+    ip_address INET,
+    user_agent TEXT
+);
+
+-- ============================================
+-- Indexes
+-- ============================================
+
+-- Users indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON app.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON app.users(username);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON app.users(is_active);
+
+-- Organizations indexes
+CREATE INDEX IF NOT EXISTS idx_organizations_code ON app.organizations(code);
+CREATE INDEX IF NOT EXISTS idx_organizations_is_active ON app.organizations(is_active);
+
+-- Documents indexes
+CREATE INDEX IF NOT EXISTS idx_documents_organization_id ON app.documents(organization_id);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON app.documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_created_by ON app.documents(created_by);
+CREATE INDEX IF NOT EXISTS idx_documents_created_at ON app.documents(created_at);
+CREATE INDEX IF NOT EXISTS idx_documents_metadata ON app.documents USING gin(metadata);
+
+-- Audit log indexes
+CREATE INDEX IF NOT EXISTS idx_audit_log_table_name ON audit.audit_log(table_name);
+CREATE INDEX IF NOT EXISTS idx_audit_log_record_id ON audit.audit_log(record_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_changed_at ON audit.audit_log(changed_at);
+
+-- ============================================
+-- Functions and Triggers
+-- ============================================
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply updated_at trigger to tables
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON app.users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON app.organizations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON app.documents
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Initial Data
+-- ============================================
+
+-- Insert default system settings
+INSERT INTO config.system_settings (key, value, description) VALUES
+    ('app_name', 'DOCMP', 'Application name'),
+    ('app_version', '1.0.0', 'Application version'),
+    ('maintenance_mode', 'false', 'Maintenance mode flag')
+ON CONFLICT (key) DO NOTHING;
+
+-- ============================================
+-- Grants (adjust as needed)
+-- ============================================
+
+-- Grant permissions to application user
+-- GRANT USAGE ON SCHEMA app TO docmp_app_user;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO docmp_app_user;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO docmp_app_user;
+
+-- Grant read-only access to config schema
+-- GRANT USAGE ON SCHEMA config TO docmp_app_user;
+-- GRANT SELECT ON ALL TABLES IN SCHEMA config TO docmp_app_user;
+
+-- Grant insert access to audit schema
+-- GRANT USAGE ON SCHEMA audit TO docmp_app_user;
+-- GRANT INSERT ON ALL TABLES IN SCHEMA audit TO docmp_app_user;
+
+-- ============================================
+-- Comments
+-- ============================================
+
+COMMENT ON SCHEMA app IS 'Main application schema';
+COMMENT ON SCHEMA audit IS 'Audit and logging schema';
+COMMENT ON SCHEMA config IS 'Configuration and static data schema';
+
+COMMENT ON TABLE app.users IS 'Application users';
+COMMENT ON TABLE app.organizations IS 'Organizations/tenants';
+COMMENT ON TABLE app.documents IS 'Main documents table';
+COMMENT ON TABLE audit.audit_log IS 'Audit trail for all changes';
+
+-- Schema creation completed
+SELECT 'Schema created successfully!' AS status;
