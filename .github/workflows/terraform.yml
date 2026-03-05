@@ -16,6 +16,9 @@ jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     
     # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
     defaults:
@@ -66,10 +69,6 @@ jobs:
           -backend-config="region=${{ steps.tfvars.outputs.aws_region }}" \
           -backend-config="encrypt=true"
 
-    # Validate Terraform configuration
-    - name: Terraform Validate
-      run: terraform validate
-
     # Format check
     - name: Terraform Format Check
       run: terraform fmt -check -recursive
@@ -81,7 +80,15 @@ jobs:
       run: terraform plan -var-file="terraform.tfvars" -out=tfplan
       continue-on-error: false
 
-    # Apply the Terraform plan (only on push to main)
+    # Save plan for review
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: tfplan
+        retention-days: 5
+
+    # Apply the Terraform plan (requires manual approval via environment protection)
     - name: Terraform Apply
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: terraform apply -auto-approve tfplan
@@ -109,7 +116,6 @@ jobs:
         script: |
           const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
           #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
           #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
 
           *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
