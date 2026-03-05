@@ -31,6 +31,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    # Debug: Print working directory and files
+    - name: Debug - Show Directory
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Files in current directory:"
+        ls -la
+        echo "Checking for terraform.tfvars:"
+        ls -la terraform.tfvars || echo "terraform.tfvars not found"
+
     # Extract configuration from terraform.tfvars
     - name: Extract Terraform Variables
       id: tfvars

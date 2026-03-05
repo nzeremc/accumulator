@@ -85,15 +85,15 @@ resource "aws_ecs_task_definition" "app" {
       secrets = [
         {
           name      = "DB_USERNAME"
-          valueFrom = "${var.db_secret_arn}:username::"
+          valueFrom = format("%s:username::", var.db_secret_arn)
         },
         {
           name      = "DB_PASSWORD"
-          valueFrom = "${var.db_secret_arn}:password::"
+          valueFrom = format("%s:password::", var.db_secret_arn)
         },
         {
           name      = "REDIS_AUTH_TOKEN"
-          valueFrom = "${var.redis_secret_arn}:auth_token::"
+          valueFrom = format("%s:auth_token::", var.redis_secret_arn)
         }
       ]
 

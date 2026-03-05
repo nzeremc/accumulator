@@ -86,6 +86,7 @@ variable "db_name" {
 variable "db_secret_arn" {
   description = "ARN of database credentials secret"
   type        = string
+  sensitive   = false
 }
 
 variable "redis_host" {
@@ -96,6 +97,7 @@ variable "redis_host" {
 variable "redis_secret_arn" {
   description = "ARN of Redis AUTH token secret"
   type        = string
+  sensitive   = false
 }
 
 variable "kafka_brokers" {
