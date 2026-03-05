@@ -1,14 +1,14 @@
-# GitHub Secrets Setup - Simplified Guide
+# GitHub Secrets Setup Guide
 
-## ✅ Only 2 Secrets Required!
+## ✅ Only 2 Secrets Required
 
-After refactoring, you only need to add **2 GitHub secrets** (AWS credentials). Everything else is configured in `terraform.tfvars`.
+You only need to add **2 GitHub secrets** (AWS credentials). Everything else is configured in `terraform.tfvars`.
 
 ---
 
 ## 🔐 Required GitHub Secrets
 
-Go to: `https://github.com/nzeremc/accumulator/settings/secrets/actions`
+Go to: `https://github.com/YOUR-USERNAME/YOUR-REPO/settings/secrets/actions`
 
 ### 1. AWS_ACCESS_KEY_ID
 **Value**: Your AWS IAM access key ID
@@ -210,11 +210,11 @@ terraform output rds_master_password_secret_name
 
 ## 📚 Related Documentation
 
-- **CONFIGURATION-GUIDE.md** - Where to put configuration values
+- **QUICKSTART.md** - Quick start guide
+- **README.md** - Complete documentation
 - **terraform.tfvars.example** - Example configuration file
-- **DEPLOYMENT.md** - Complete deployment guide
 - **terraform-iam-policy.json** - Required IAM permissions
 
 ---
 
-**That's it! Only 2 secrets needed. Everything else is automated! 🎉**
+**Only 2 secrets needed. Everything else is automated!**

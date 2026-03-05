@@ -1,19 +1,18 @@
 # Database Initialization Scripts
 
-Place your SQL initialization script(s) here.
+Place your SQL initialization script here.
 
-## Expected Files
+## Expected File
 
-- `schema.sql` - Main database schema creation script
+- `schema.sql` - Database schema creation script
 
-## What This Script Should Do
+## What to Include
 
-1. Create database schemas
-2. Create tables
-3. Create indexes
-4. Create constraints
-5. Create functions/procedures (if any)
-6. Set up initial database structure
+1. Database schemas
+2. Tables
+3. Indexes
+4. Constraints
+5. Functions/procedures (if needed)
 
 ## Example
 

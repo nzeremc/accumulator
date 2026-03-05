@@ -1,13 +1,12 @@
 # Static Data Files
 
-Place your static data files here that need to be loaded into the database.
+Place your static data files here for database loading.
 
-## Supported File Formats
+## Supported Formats
 
 - CSV files (`.csv`)
 - JSON files (`.json`)
 - SQL files with INSERT statements (`.sql`)
-- Text files (`.txt`)
 
 ## Example Files
 
@@ -63,11 +62,11 @@ static-data/
     └── initial_data.sql
 ```
 
-All files and subdirectories will be uploaded to S3 and processed by the initialization task.
+All files and subdirectories will be uploaded to S3 and processed during initialization.
 
 ## Notes
 
-- Files are uploaded to: `s3://docmp-data-bucket-unique-name/static-data/`
-- The DB init task processes files in alphabetical order
-- Large files are supported (S3 handles the storage)
-- Files are only uploaded when they change (Terraform tracks via etag/md5)
+- Files are uploaded to S3 automatically by Terraform
+- DB init task processes files in alphabetical order
+- Large files are supported
+- Files are only uploaded when they change

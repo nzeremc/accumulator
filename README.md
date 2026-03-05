@@ -1,6 +1,6 @@
 # DOCMP AWS Infrastructure Automation
 
-This repository contains Terraform code to provision and manage the complete AWS infrastructure for the DOCMP system, including one-time database initialization.
+Complete AWS infrastructure automation for the DOCMP system using Terraform and GitHub Actions.
 
 ## 🏗️ Architecture Overview
 
@@ -346,23 +346,9 @@ terraform import module.rds.aws_db_instance.primary db-instance-id
 
 5. **SSL Certificates**: Add SSL certificate ARN to enable HTTPS on ALB.
 
-## 🤝 Contributing
-
-1. Create a feature branch
-2. Make changes
-3. Test with `terraform plan`
-4. Submit pull request
-5. GitHub Actions will validate changes
-
-## 📄 License
-
-[Add your license here]
-
 ## 📞 Support
 
-For issues or questions:
-- Create an issue in this repository
-- Contact: [your-contact-info]
+For issues or questions, refer to the documentation files in this repository.
 
 ## 🔗 Additional Resources
 
