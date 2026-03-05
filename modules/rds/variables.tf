@@ -37,9 +37,9 @@ variable "master_password" {
 }
 
 variable "backup_retention_period" {
-  description = "Backup retention period in days"
+  description = "Backup retention period in days (0 for free tier, 1-35 for production)"
   type        = number
-  default     = 7
+  default     = 0
 }
 
 variable "multi_az" {

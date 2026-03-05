@@ -20,7 +20,7 @@ rds_allocated_storage       = 100
 rds_engine_version          = "15.4"
 rds_database_name           = "docmp"
 rds_master_username         = "docmp_admin"
-rds_backup_retention_period = 7
+rds_backup_retention_period = 0  # Set to 0 for free tier testing, increase for production (1-35 days)
 rds_multi_az                = true
 
 # MSK (Kafka) Configuration
