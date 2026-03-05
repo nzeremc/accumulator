@@ -24,23 +24,22 @@ resource "aws_db_parameter_group" "postgres" {
     apply_method = "pending-reboot"
   }
 
-  # Dynamic parameters (can be applied immediately)
   parameter {
     name         = "max_replication_slots"
     value        = "10"
-    apply_method = "immediate"
+    apply_method = "pending-reboo"
   }
 
   parameter {
     name         = "max_wal_senders"
     value        = "10"
-    apply_method = "immediate"
+    apply_method = "pending-reboo"
   }
 
   parameter {
     name         = "wal_sender_timeout"
     value        = "0"
-    apply_method = "immediate"
+    apply_method = "pending-reboo"
   }
 
   tags = merge(
