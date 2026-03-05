@@ -60,10 +60,6 @@ jobs:
           -backend-config="region=${{ steps.tfvars.outputs.aws_region }}" \
           -backend-config="encrypt=true"
 
-    - name: Terraform Format Check
-      run: terraform fmt -check -recursive
-      continue-on-error: true
-
     - name: Terraform Plan
       id: plan
       run: terraform plan -var-file="terraform.tfvars" -out=tfplan

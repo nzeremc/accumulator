@@ -266,14 +266,4 @@ aws logs tail /ecs/docmp --follow --region ap-south-1
 6. ⏭️ Set up monitoring and alerts
 
 ---
-
-## Support
-
-For issues or questions, refer to:
-- `README.md` - Detailed documentation
-- `GITHUB-SECRETS-SIMPLIFIED.md` - GitHub Actions setup
-- `terraform.tfvars.example` - Configuration examples
-
----
-
 **Infrastructure is ready! Deploy your application and start building! 🚀**
