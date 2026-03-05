@@ -1,3 +1,14 @@
+# ECR Outputs
+output "ecr_app_repository_url" {
+  description = "URL of the application ECR repository"
+  value       = module.ecr.app_repository_url
+}
+
+output "ecr_db_init_repository_url" {
+  description = "URL of the DB init ECR repository"
+  value       = module.ecr.db_init_repository_url
+}
+
 # Networking Outputs
 output "vpc_id" {
   description = "ID of the VPC"

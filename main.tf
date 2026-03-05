@@ -35,6 +35,15 @@ module "s3" {
   tags = local.common_tags
 }
 
+# ECR Module
+module "ecr" {
+  source = "./modules/ecr"
+
+  project_name = var.project_name
+
+  tags = local.common_tags
+}
+
 # RDS Module
 module "rds" {
   source = "./modules/rds"
@@ -123,7 +132,7 @@ module "ecs" {
   task_cpu            = var.ecs_task_cpu
   task_memory         = var.ecs_task_memory
   desired_count       = var.ecs_desired_count
-  container_image     = var.ecs_container_image
+  container_image     = "${module.ecr.app_repository_url}:latest"
   container_port      = var.ecs_container_port
   execution_role_arn  = module.iam.ecs_task_execution_role_arn
   task_role_arn       = module.iam.ecs_task_role_arn
@@ -160,7 +169,7 @@ resource "aws_ecs_task_definition" "db_init" {
   container_definitions = jsonencode([
     {
       name      = "db-init"
-      image     = "${var.ecs_container_image}-db-init:latest"  # You need to build and push this image
+      image     = "${module.ecr.db_init_repository_url}:latest"
       essential = true
 
       environment = [

@@ -35,8 +35,9 @@ redis_parameter_group_family = "redis7"
 ecs_task_cpu        = "1024"
 ecs_task_memory     = "2048"
 ecs_desired_count   = 2
-ecs_container_image = "your-ecr-repo/docmp-app:latest"
 ecs_container_port  = 8080
+# Note: ECR repositories are created automatically by Terraform
+# Container images will use: <account-id>.dkr.ecr.<region>.amazonaws.com/docmp-app:latest
 
 # Database Initialization Configuration
 db_init_script_s3_key        = "init/schema.sql"

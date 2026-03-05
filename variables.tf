@@ -139,11 +139,6 @@ variable "ecs_desired_count" {
   type        = number
 }
 
-variable "ecs_container_image" {
-  description = "Docker image for ECS container"
-  type        = string
-}
-
 variable "ecs_container_port" {
   description = "Container port for ECS service"
   type        = number
