@@ -1,146 +1,126 @@
--- DOCMP Database Schema Initialization Script
--- This is a sample schema for testing purposes
+/**
+* author: Vamsi Gangarapu
+* project: DOCMP - Accumulator
+*/
 
--- Create application schema
-CREATE SCHEMA IF NOT EXISTS app;
+DROP SCHEMA docmp CASCADE;
 
--- Set search path
-SET search_path TO app, public;
+CREATE SCHEMA docmp;
 
--- Users table
-CREATE TABLE IF NOT EXISTS app.users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(255) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    first_name VARCHAR(100),
-    last_name VARCHAR(100),
-    role VARCHAR(50) DEFAULT 'user',
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TYPE docmp.program_type AS ENUM (
+    'CHAMPVA'
 );
 
--- Create index on email for faster lookups
-CREATE INDEX IF NOT EXISTS idx_users_email ON app.users(email);
-CREATE INDEX IF NOT EXISTS idx_users_username ON app.users(username);
-CREATE INDEX IF NOT EXISTS idx_users_role ON app.users(role);
-
--- Organizations table
-CREATE TABLE IF NOT EXISTS app.organizations (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    description TEXT,
-    website VARCHAR(255),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TYPE docmp.status_type AS ENUM (
+    'INDIVIDUAL',
+    'FAMILY',
+    'COSTSHARE'
 );
 
--- User-Organization relationship
-CREATE TABLE IF NOT EXISTS app.user_organizations (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-    organization_id INTEGER NOT NULL REFERENCES app.organizations(id) ON DELETE CASCADE,
-    role VARCHAR(50) DEFAULT 'member',
-    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, organization_id)
+CREATE TYPE docmp.units_type AS ENUM (
+    'DOLLAR'
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_orgs_user ON app.user_organizations(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_orgs_org ON app.user_organizations(organization_id);
-
--- Documents table
-CREATE TABLE IF NOT EXISTS app.documents (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(500) NOT NULL,
-    content TEXT,
-    document_type VARCHAR(100),
-    status VARCHAR(50) DEFAULT 'draft',
-    owner_id INTEGER NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-    organization_id INTEGER REFERENCES app.organizations(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    published_at TIMESTAMP
+CREATE TABLE docmp.sponsor (
+    sponsor_id VARCHAR(50),
+    sponsor_ssn VARCHAR(100),
+    dfn VARCHAR(50) NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_documents_owner ON app.documents(owner_id);
-CREATE INDEX IF NOT EXISTS idx_documents_org ON app.documents(organization_id);
-CREATE INDEX IF NOT EXISTS idx_documents_status ON app.documents(status);
-CREATE INDEX IF NOT EXISTS idx_documents_type ON app.documents(document_type);
-
--- Audit log table
-CREATE TABLE IF NOT EXISTS app.audit_logs (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES app.users(id) ON DELETE SET NULL,
-    action VARCHAR(100) NOT NULL,
-    entity_type VARCHAR(100),
-    entity_id INTEGER,
-    old_values JSONB,
-    new_values JSONB,
-    ip_address INET,
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE docmp.id (
+    sponsor_id VARCHAR(50) NOT NULL,
+    patient_id VARCHAR(50),
+    id_hash VARCHAR(64) NOT NULL,
+    patient_ssn VARCHAR(100),
+    bfn VARCHAR(50)
 );
 
-CREATE INDEX IF NOT EXISTS idx_audit_user ON app.audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_action ON app.audit_logs(action);
-CREATE INDEX IF NOT EXISTS idx_audit_entity ON app.audit_logs(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_audit_created ON app.audit_logs(created_at);
-
--- Settings table (key-value store)
-CREATE TABLE IF NOT EXISTS app.settings (
-    id SERIAL PRIMARY KEY,
-    key VARCHAR(255) NOT NULL UNIQUE,
-    value JSONB NOT NULL,
-    description TEXT,
-    is_public BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE docmp.monetary_accumulator (
+    accumulator_id uuid DEFAULT gen_random_uuid(),
+    sponsor_id VARCHAR(50) NOT NULL,
+    patient_id VARCHAR(50) NOT NULL,
+    program docmp.program_type,
+    accumulator_start_date date DEFAULT date_trunc('year', CURRENT_DATE),
+    accumulator_end_date date DEFAULT (
+        date_trunc('year', CURRENT_DATE)
+        + INTERVAL '1 year'
+        - INTERVAL '1 second'
+    ),
+    individual_deductable numeric(10,2) DEFAULT 0,
+    individual_deductable_max numeric(10,2) DEFAULT 50
 );
 
-CREATE INDEX IF NOT EXISTS idx_settings_key ON app.settings(key);
+CREATE TABLE docmp.family_monetary_accumulator (
+    family_accumulator_id uuid DEFAULT gen_random_uuid(),
+    sponsor_id VARCHAR(50) NOT NULL,
+    program docmp.program_type,
+    accumulator_start_date date DEFAULT date_trunc('year', CURRENT_DATE),
+    accumulator_end_date date DEFAULT (
+        date_trunc('year', CURRENT_DATE)
+        + INTERVAL '1 year'
+        - INTERVAL '1 second'
+    ),
+    family_deductable numeric(10,2) DEFAULT 0,
+    family_deductable_max numeric(10,2) DEFAULT 100,
+    out_of_pocket numeric(10,2) DEFAULT 0,
+    out_of_pocket_max numeric(10,2) DEFAULT 3000
+);
 
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION app.update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+CREATE TABLE docmp.claims (
+    claim_id uuid,
+    accumulator_id uuid,
+    sponsor_id VARCHAR(50) NOT NULL,
+    patient_id VARCHAR(50) NOT NULL,
+    type docmp.status_type,
+    delta numeric(10,2) NOT NULL,
+    claim_number VARCHAR(50),
+    start_date_of_service date NOT NULL,
+    end_date_of_service date NOT NULL,
+    source VARCHAR(50) NOT NULL,
+    notes text,
+    create_date timestamp DEFAULT CURRENT_TIMESTAMP,
+    units docmp.units_type
+);
 
--- Triggers for updated_at
-CREATE TRIGGER update_users_updated_at
-    BEFORE UPDATE ON app.users
-    FOR EACH ROW
-    EXECUTE FUNCTION app.update_updated_at_column();
+CREATE TABLE docmp.eligibilities (
+    eligibility_id uuid DEFAULT gen_random_uuid(),
+    sponsor_icn VARCHAR(50) NOT NULL,
+    patient_icn VARCHAR(50),
+    start_date date,
+    end_date date
+);
 
-CREATE TRIGGER update_organizations_updated_at
-    BEFORE UPDATE ON app.organizations
-    FOR EACH ROW
-    EXECUTE FUNCTION app.update_updated_at_column();
+CREATE TABLE docmp.historical_id (
+    historical_id uuid DEFAULT gen_random_uuid(),
+    sponsor_id VARCHAR(50) NOT NULL,
+    patient_id VARCHAR(50) NOT NULL,
+    old_patient_id VARCHAR(50) NOT NULL
+);
 
-CREATE TRIGGER update_documents_updated_at
-    BEFORE UPDATE ON app.documents
-    FOR EACH ROW
-    EXECUTE FUNCTION app.update_updated_at_column();
+CREATE TABLE docmp.icn_crosswalk (
+    dfn VARCHAR(70),
+    bfn VARCHAR(70),
+    icn VARCHAR(70)
+);
 
-CREATE TRIGGER update_settings_updated_at
-    BEFORE UPDATE ON app.settings
-    FOR EACH ROW
-    EXECUTE FUNCTION app.update_updated_at_column();
+-- Prevent duplicate sponsors
+CREATE UNIQUE INDEX idx_sponsor_pk
+ON docmp.sponsor (sponsor_id);
 
--- Grant permissions (adjust as needed)
-GRANT USAGE ON SCHEMA app TO PUBLIC;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO PUBLIC;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO PUBLIC;
+-- Prevent duplicate id_hash
+CREATE UNIQUE INDEX idx_id_hash_pk
+ON docmp.id (id_hash);
 
--- Success message
-DO $$
-BEGIN
-    RAISE NOTICE 'DOCMP database schema created successfully!';
-    RAISE NOTICE 'Schema: app';
-    RAISE NOTICE 'Tables: users, organizations, user_organizations, documents, audit_logs, settings';
-END $$;
+-- Prevent duplicate sponsor/patient combo
+CREATE UNIQUE INDEX idx_id_sponsor_patient_unique
+ON docmp.id (sponsor_id, patient_id);
 
--- Made with Bob
+-- Required for ON CONFLICT in monetary_accumulator
+CREATE UNIQUE INDEX idx_monetary_unique
+ON docmp.monetary_accumulator
+(patient_id, sponsor_id, accumulator_start_date, accumulator_end_date);
+
+-- Required for ON CONFLICT in family_monetary_accumulator
+CREATE UNIQUE INDEX idx_family_accumulator_unique
+ON docmp.family_monetary_accumulator
+(sponsor_id, accumulator_start_date, accumulator_end_date);
