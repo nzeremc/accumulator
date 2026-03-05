@@ -53,9 +53,20 @@ output "rds_database_name" {
 }
 
 output "rds_secret_arn" {
-  description = "ARN of the database credentials secret"
+  description = "ARN of the RDS database credentials secret (from RDS module)"
   value       = module.rds.db_secret_arn
   sensitive   = true
+}
+
+output "rds_master_password_secret_arn" {
+  description = "ARN of the auto-generated RDS master password in Secrets Manager"
+  value       = aws_secretsmanager_secret.rds_master_password.arn
+  sensitive   = true
+}
+
+output "rds_master_password_secret_name" {
+  description = "Name of the auto-generated RDS master password secret"
+  value       = aws_secretsmanager_secret.rds_master_password.name
 }
 
 # MSK Outputs

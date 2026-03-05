@@ -10,6 +10,35 @@ locals {
   )
 }
 
+# Generate random password for RDS
+resource "random_password" "rds_master_password" {
+  length  = 16
+  special = true
+  # Exclude characters that might cause issues in connection strings
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+# Store RDS password in AWS Secrets Manager
+resource "aws_secretsmanager_secret" "rds_master_password" {
+  name_prefix             = "${var.project_name}-rds-master-password-"
+  description             = "Master password for RDS PostgreSQL instances"
+  recovery_window_in_days = 7
+
+  tags = local.common_tags
+}
+
+resource "aws_secretsmanager_secret_version" "rds_master_password" {
+  secret_id = aws_secretsmanager_secret.rds_master_password.id
+  secret_string = jsonencode({
+    username = var.rds_master_username
+    password = random_password.rds_master_password.result
+    engine   = "postgres"
+    host     = module.rds.primary_endpoint
+    port     = 5432
+    dbname   = var.rds_database_name
+  })
+}
+
 # Networking Module
 module "networking" {
   source = "./modules/networking"
@@ -54,7 +83,7 @@ module "rds" {
   allocated_storage       = var.rds_allocated_storage
   database_name           = var.rds_database_name
   master_username         = var.rds_master_username
-  master_password         = var.rds_master_password
+  master_password         = random_password.rds_master_password.result
   backup_retention_period = var.rds_backup_retention_period
   multi_az                = var.rds_multi_az
   private_subnet_ids      = module.networking.private_subnet_ids
@@ -69,7 +98,7 @@ module "iam" {
 
   project_name   = var.project_name
   s3_bucket_arn  = module.s3.bucket_arn
-  db_secret_arn  = module.rds.db_secret_arn
+  db_secret_arn  = aws_secretsmanager_secret.rds_master_password.arn
 
   tags = local.common_tags
 }

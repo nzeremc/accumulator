@@ -14,6 +14,11 @@ variable "environment" {
   type        = string
 }
 
+variable "terraform_state_bucket" {
+  description = "S3 bucket name for Terraform state storage"
+  type        = string
+}
+
 # Networking Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
@@ -59,12 +64,6 @@ variable "rds_database_name" {
 
 variable "rds_master_username" {
   description = "Master username for RDS"
-  type        = string
-  sensitive   = true
-}
-
-variable "rds_master_password" {
-  description = "Master password for RDS"
   type        = string
   sensitive   = true
 }

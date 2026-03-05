@@ -1,21 +1,25 @@
 # General Configuration
-aws_region   = "us-east-1"
+aws_region   = "ap-south-1"  # Mumbai region
 project_name = "docmp"
 environment  = "production"
 
+# Terraform Backend Configuration
+# S3 bucket for storing Terraform state
+terraform_state_bucket = "docmp-terraform-state-2101"
+
 # Networking Configuration
 vpc_cidr             = "10.0.0.0/16"
-availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+availability_zones   = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 
 # RDS PostgreSQL Configuration (Active-Active Infrastructure)
+# Note: Password is auto-generated and stored in AWS Secrets Manager
 rds_instance_class          = "db.t3.large"
 rds_allocated_storage       = 100
 rds_engine_version          = "15.4"
 rds_database_name           = "docmp"
 rds_master_username         = "docmp_admin"
-rds_master_password         = "CHANGE_ME_SECURE_PASSWORD"
 rds_backup_retention_period = 7
 rds_multi_az                = true
 
