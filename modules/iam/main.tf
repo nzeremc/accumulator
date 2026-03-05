@@ -1,3 +1,15 @@
+# ECS Service-Linked Role
+# This role is required for ECS to manage resources on your behalf
+resource "aws_iam_service_linked_role" "ecs" {
+  aws_service_name = "ecs.amazonaws.com"
+  description      = "Role to enable Amazon ECS to manage your cluster"
+
+  lifecycle {
+    # Ignore if already exists
+    ignore_changes = all
+  }
+}
+
 # ECS Task Execution Role
 resource "aws_iam_role" "ecs_task_execution" {
   name_prefix = "${var.project_name}-ecs-task-execution-"
