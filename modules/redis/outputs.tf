@@ -25,7 +25,7 @@ output "port" {
 
 output "auth_token_secret_arn" {
   description = "ARN of the Redis AUTH token secret"
-  value       = aws_secretsmanager_secret.redis_auth.arn
+  value       = nonsensitive(aws_secretsmanager_secret.redis_auth.arn)
 }
 
 output "auth_token_secret_name" {

@@ -1,0 +1,7 @@
+username,email,first_name,last_name,role
+admin,admin@docmp.com,Admin,User,admin
+john.doe,john.doe@docmp.com,John,Doe,user
+jane.smith,jane.smith@docmp.com,Jane,Smith,user
+bob.wilson,bob.wilson@docmp.com,Bob,Wilson,manager
+alice.brown,alice.brown@docmp.com,Alice,Brown,user
+charlie.davis,charlie.davis@docmp.com,Charlie,Davis,editor

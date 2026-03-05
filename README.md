@@ -32,38 +32,59 @@ git clone <repository-url>
 cd aws-tf
 ```
 
-### 2. Configure Variables
+### 2. Configure Backend (S3 State Storage)
 
-Copy the example tfvars file and customize it:
+**IMPORTANT**: Edit `provider.tf` and update the S3 backend configuration with your bucket name:
 
-```bash
-cp terraform.tfvars.example terraform.tfvars
+```hcl
+backend "s3" {
+  bucket  = "your-terraform-state-bucket-name"  # ⚠️ CHANGE THIS
+  key     = "docmp/terraform.tfstate"
+  region  = "your-aws-region"                   # ⚠️ CHANGE THIS
+  encrypt = true
+}
 ```
+
+**Example**:
+```hcl
+backend "s3" {
+  bucket  = "docmp-terraform-state-2101"
+  key     = "docmp/terraform.tfstate"
+  region  = "ap-south-1"
+  encrypt = true
+}
+```
+
+### 3. Configure Variables
 
 Edit `terraform.tfvars` with your specific values:
 
 ```hcl
 # General Configuration
-aws_region   = "us-east-1"
+aws_region   = "ap-south-1"  # Must match backend region
 project_name = "docmp"
 environment  = "production"
 
+# Terraform Backend
+terraform_state_bucket = "docmp-terraform-state-2101"  # Must match backend bucket
+
 # Networking
 vpc_cidr             = "10.0.0.0/16"
-availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+availability_zones   = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 
-# RDS Configuration
+# RDS Configuration (password auto-generated)
 rds_instance_class    = "db.t3.large"
 rds_allocated_storage = 100
 rds_master_username   = "docmp_admin"
-rds_master_password   = "CHANGE_ME_SECURE_PASSWORD"
 
 # ... (see terraform.tfvars.example for all options)
 ```
 
-### 3. Initialize Terraform
+**Note**: RDS password is auto-generated and stored in AWS Secrets Manager. No need to provide it manually.
+
+### 4. Initialize Terraform
 
 ```bash
 terraform init
@@ -85,19 +106,21 @@ terraform apply -var-file="terraform.tfvars"
 
 ### Setup GitHub Secrets
 
-Configure the following secrets in your GitHub repository:
+Configure only **2 secrets** in your GitHub repository (Settings → Secrets and variables → Actions):
 
-- `AWS_ACCESS_KEY_ID`: AWS access key
-- `AWS_SECRET_ACCESS_KEY`: AWS secret key
-- `AWS_REGION`: AWS region (e.g., us-east-1)
-- `TF_STATE_BUCKET`: S3 bucket for Terraform state
-- `ECR_REPOSITORY_NAME`: ECR repository name for container images
+- `AWS_ACCESS_KEY_ID`: Your AWS IAM access key ID
+- `AWS_SECRET_ACCESS_KEY`: Your AWS IAM secret access key
+
+**Note**: All other configuration (region, S3 bucket, etc.) is in `terraform.tfvars` and `provider.tf`.
+
+See [GITHUB-SECRETS-SIMPLIFIED.md](GITHUB-SECRETS-SIMPLIFIED.md) for detailed setup instructions.
 
 ### Workflow
 
 The GitHub Actions workflow automatically:
 
-1. Validates Terraform configuration
+1. Reads configuration from `terraform.tfvars`
+2. Validates Terraform configuration
 2. Plans infrastructure changes
 3. Applies changes on push to main branch
 4. Builds and pushes DB initialization Docker image

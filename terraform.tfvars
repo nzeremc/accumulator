@@ -1,5 +1,5 @@
 # General Configuration
-aws_region   = "ap-south-1"  # Mumbai region
+aws_region   = "ap-south-1" # Mumbai region
 project_name = "docmp"
 environment  = "production"
 
@@ -36,17 +36,17 @@ redis_engine_version         = "7.0"
 redis_parameter_group_family = "redis7"
 
 # ECS Configuration
-ecs_task_cpu        = "1024"
-ecs_task_memory     = "2048"
-ecs_desired_count   = 2
-ecs_container_port  = 8080
+ecs_task_cpu       = "1024"
+ecs_task_memory    = "2048"
+ecs_desired_count  = 2
+ecs_container_port = 8080
 # Note: ECR repositories are created automatically by Terraform
 # Container images will use: <account-id>.dkr.ecr.<region>.amazonaws.com/docmp-app:latest
 
 # Database Initialization Configuration
-db_init_script_s3_key        = "init/schema.sql"
-db_init_static_files_prefix  = "static-data/"
-enable_db_initialization     = true
+db_init_script_s3_key       = "init/schema.sql"
+db_init_static_files_prefix = "static-data/"
+enable_db_initialization    = true
 
 # Load Balancer Configuration
 alb_health_check_path     = "/health"
@@ -61,7 +61,7 @@ s3_versioning_enabled = true
 
 # Additional Tags
 additional_tags = {
-  Owner       = "DevOps Team"
-  CostCenter  = "Engineering"
-  Compliance  = "HIPAA"
+  Owner      = "DevOps Team"
+  CostCenter = "Engineering"
+  Compliance = "HIPAA"
 }

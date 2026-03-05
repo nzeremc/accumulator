@@ -38,7 +38,7 @@ resource "aws_elasticache_parameter_group" "main" {
 resource "aws_elasticache_replication_group" "main" {
   replication_group_id = "${var.project_name}-redis"
   description          = "Redis cluster for ${var.project_name}"
-  
+
   engine               = "redis"
   engine_version       = var.engine_version
   node_type            = var.node_type
@@ -51,17 +51,17 @@ resource "aws_elasticache_replication_group" "main" {
 
   # High Availability Configuration
   automatic_failover_enabled = var.num_cache_nodes > 1 ? true : false
-  multi_az_enabled          = var.num_cache_nodes > 1 ? true : false
+  multi_az_enabled           = var.num_cache_nodes > 1 ? true : false
 
   # Backup Configuration
   snapshot_retention_limit = 5
-  snapshot_window         = "03:00-05:00"
-  maintenance_window      = "sun:05:00-sun:07:00"
+  snapshot_window          = "03:00-05:00"
+  maintenance_window       = "sun:05:00-sun:07:00"
 
   # Encryption
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
-  auth_token                = random_password.redis_auth.result
+  auth_token                 = random_password.redis_auth.result
 
   # Logging
   log_delivery_configuration {
@@ -112,11 +112,11 @@ resource "aws_secretsmanager_secret" "redis_auth" {
 resource "aws_secretsmanager_secret_version" "redis_auth" {
   secret_id = aws_secretsmanager_secret.redis_auth.id
   secret_string = jsonencode({
-    auth_token              = random_password.redis_auth.result
-    primary_endpoint        = aws_elasticache_replication_group.main.primary_endpoint_address
-    reader_endpoint         = aws_elasticache_replication_group.main.reader_endpoint_address
-    configuration_endpoint  = aws_elasticache_replication_group.main.configuration_endpoint_address
-    port                    = 6379
+    auth_token             = random_password.redis_auth.result
+    primary_endpoint       = aws_elasticache_replication_group.main.primary_endpoint_address
+    reader_endpoint        = aws_elasticache_replication_group.main.reader_endpoint_address
+    configuration_endpoint = aws_elasticache_replication_group.main.configuration_endpoint_address
+    port                   = 6379
   })
 }
 

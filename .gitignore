@@ -69,3 +69,11 @@ temp/
 
 # Keep the example tfvars file
 !terraform.tfvars.example
+.terraform.lock.hcl
+# Data files directory - keep structure but ignore actual data files
+data-files/init/*
+!data-files/init/README.md
+!data-files/init/schema.sql
+data-files/static-data/*
+!data-files/static-data/README.md
+!data-files/static-data/sample-users.csv

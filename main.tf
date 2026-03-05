@@ -33,10 +33,13 @@ resource "aws_secretsmanager_secret_version" "rds_master_password" {
     username = var.rds_master_username
     password = random_password.rds_master_password.result
     engine   = "postgres"
-    host     = module.rds.primary_endpoint
     port     = 5432
     dbname   = var.rds_database_name
   })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 # Networking Module
@@ -57,9 +60,9 @@ module "networking" {
 module "s3" {
   source = "./modules/s3"
 
-  project_name        = var.project_name
-  bucket_name         = var.s3_bucket_name
-  versioning_enabled  = var.s3_versioning_enabled
+  project_name       = var.project_name
+  bucket_name        = var.s3_bucket_name
+  versioning_enabled = var.s3_versioning_enabled
 
   tags = local.common_tags
 }
@@ -96,9 +99,9 @@ module "rds" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name   = var.project_name
-  s3_bucket_arn  = module.s3.bucket_arn
-  db_secret_arn  = aws_secretsmanager_secret.rds_master_password.arn
+  project_name  = var.project_name
+  s3_bucket_arn = module.s3.bucket_arn
+  db_secret_arn = aws_secretsmanager_secret.rds_master_password.arn
 
   tags = local.common_tags
 }
@@ -122,13 +125,13 @@ module "msk" {
 module "redis" {
   source = "./modules/redis"
 
-  project_name             = var.project_name
-  engine_version           = var.redis_engine_version
-  node_type                = var.redis_node_type
-  num_cache_nodes          = var.redis_num_cache_nodes
-  parameter_group_family   = var.redis_parameter_group_family
-  private_subnet_ids       = module.networking.private_subnet_ids
-  security_group_id        = module.networking.redis_security_group_id
+  project_name           = var.project_name
+  engine_version         = var.redis_engine_version
+  node_type              = var.redis_node_type
+  num_cache_nodes        = var.redis_num_cache_nodes
+  parameter_group_family = var.redis_parameter_group_family
+  private_subnet_ids     = module.networking.private_subnet_ids
+  security_group_id      = module.networking.redis_security_group_id
 
   tags = local.common_tags
 }
@@ -137,17 +140,17 @@ module "redis" {
 module "alb" {
   source = "./modules/alb"
 
-  project_name           = var.project_name
-  vpc_id                 = module.networking.vpc_id
-  public_subnet_ids      = module.networking.public_subnet_ids
-  security_group_id      = module.networking.alb_security_group_id
-  container_port         = var.ecs_container_port
-  health_check_path      = var.alb_health_check_path
-  health_check_interval  = var.alb_health_check_interval
-  health_check_timeout   = var.alb_health_check_timeout
-  healthy_threshold      = var.alb_healthy_threshold
-  unhealthy_threshold    = var.alb_unhealthy_threshold
-  certificate_arn        = ""  # Add SSL certificate ARN if available
+  project_name          = var.project_name
+  vpc_id                = module.networking.vpc_id
+  public_subnet_ids     = module.networking.public_subnet_ids
+  security_group_id     = module.networking.alb_security_group_id
+  container_port        = var.ecs_container_port
+  health_check_path     = var.alb_health_check_path
+  health_check_interval = var.alb_health_check_interval
+  health_check_timeout  = var.alb_health_check_timeout
+  healthy_threshold     = var.alb_healthy_threshold
+  unhealthy_threshold   = var.alb_unhealthy_threshold
+  certificate_arn       = "" # Add SSL certificate ARN if available
 
   tags = local.common_tags
 }
@@ -156,28 +159,28 @@ module "alb" {
 module "ecs" {
   source = "./modules/ecs"
 
-  project_name        = var.project_name
-  aws_region          = var.aws_region
-  task_cpu            = var.ecs_task_cpu
-  task_memory         = var.ecs_task_memory
-  desired_count       = var.ecs_desired_count
-  container_image     = "${module.ecr.app_repository_url}:latest"
-  container_port      = var.ecs_container_port
-  execution_role_arn  = module.iam.ecs_task_execution_role_arn
-  task_role_arn       = module.iam.ecs_task_role_arn
-  private_subnet_ids  = module.networking.private_subnet_ids
-  security_group_id   = module.networking.ecs_tasks_security_group_id
-  target_group_arn    = module.alb.target_group_arn
-  alb_listener_arn    = module.alb.http_listener_arn
-  db_primary_host     = module.rds.primary_instance_address
-  db_secondary_host   = module.rds.secondary_instance_address
-  db_port             = module.rds.database_port
-  db_name             = module.rds.database_name
-  db_secret_arn       = module.rds.db_secret_arn
-  redis_host          = module.redis.primary_endpoint_address
-  redis_secret_arn    = module.redis.auth_token_secret_arn
-  kafka_brokers       = module.msk.bootstrap_brokers_tls
-  health_check_path   = var.alb_health_check_path
+  project_name       = var.project_name
+  aws_region         = var.aws_region
+  task_cpu           = var.ecs_task_cpu
+  task_memory        = var.ecs_task_memory
+  desired_count      = var.ecs_desired_count
+  container_image    = "${module.ecr.app_repository_url}:latest"
+  container_port     = var.ecs_container_port
+  execution_role_arn = module.iam.ecs_task_execution_role_arn
+  task_role_arn      = module.iam.ecs_task_role_arn
+  private_subnet_ids = module.networking.private_subnet_ids
+  security_group_id  = module.networking.ecs_tasks_security_group_id
+  target_group_arn   = module.alb.target_group_arn
+  alb_listener_arn   = module.alb.http_listener_arn
+  db_primary_host    = module.rds.primary_instance_address
+  db_secondary_host  = module.rds.secondary_instance_address
+  db_port            = module.rds.database_port
+  db_name            = module.rds.database_name
+  db_secret_arn      = module.rds.db_secret_arn
+  redis_host         = module.redis.primary_endpoint_address
+  redis_secret_arn   = module.redis.auth_token_secret_arn
+  kafka_brokers      = module.msk.bootstrap_brokers_tls
+  health_check_path  = var.alb_health_check_path
 
   tags = local.common_tags
 

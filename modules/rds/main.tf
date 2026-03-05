@@ -73,13 +73,13 @@ resource "aws_secretsmanager_secret" "db_master" {
 resource "aws_secretsmanager_secret_version" "db_master" {
   secret_id = aws_secretsmanager_secret.db_master.id
   secret_string = jsonencode({
-    username            = var.master_username
-    password            = var.master_password != "" ? var.master_password : random_password.master.result
-    engine              = "postgres"
-    host_primary        = aws_db_instance.primary.address
-    host_secondary      = aws_db_instance.secondary.address
-    port                = aws_db_instance.primary.port
-    dbname              = var.database_name
+    username                       = var.master_username
+    password                       = var.master_password != "" ? var.master_password : random_password.master.result
+    engine                         = "postgres"
+    host_primary                   = aws_db_instance.primary.address
+    host_secondary                 = aws_db_instance.secondary.address
+    port                           = aws_db_instance.primary.port
+    dbname                         = var.database_name
     dbInstanceIdentifier_primary   = aws_db_instance.primary.id
     dbInstanceIdentifier_secondary = aws_db_instance.secondary.id
   })
@@ -89,13 +89,13 @@ resource "aws_secretsmanager_secret_version" "db_master" {
 resource "aws_db_instance" "primary" {
   identifier_prefix = "${var.project_name}-postgres-primary-"
 
-  engine               = "postgres"
-  engine_version       = var.engine_version
-  instance_class       = var.instance_class
-  allocated_storage    = var.allocated_storage
-  storage_type         = "gp3"
-  storage_encrypted    = true
-  
+  engine            = "postgres"
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  allocated_storage = var.allocated_storage
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = var.database_name
   username = var.master_username
   password = var.master_password != "" ? var.master_password : random_password.master.result
@@ -104,19 +104,19 @@ resource "aws_db_instance" "primary" {
   vpc_security_group_ids = [var.security_group_id]
   parameter_group_name   = aws_db_parameter_group.postgres.name
 
-  multi_az               = var.multi_az
-  publicly_accessible    = false
+  multi_az                = var.multi_az
+  publicly_accessible     = false
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "mon:04:00-mon:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "mon:04:00-mon:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  
+
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-postgres-primary-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   deletion_protection = true
-  
+
   auto_minor_version_upgrade = true
 
   tags = merge(
@@ -139,13 +139,13 @@ resource "aws_db_instance" "primary" {
 resource "aws_db_instance" "secondary" {
   identifier_prefix = "${var.project_name}-postgres-secondary-"
 
-  engine               = "postgres"
-  engine_version       = var.engine_version
-  instance_class       = var.instance_class
-  allocated_storage    = var.allocated_storage
-  storage_type         = "gp3"
-  storage_encrypted    = true
-  
+  engine            = "postgres"
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  allocated_storage = var.allocated_storage
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = var.database_name
   username = var.master_username
   password = var.master_password != "" ? var.master_password : random_password.master.result
@@ -154,19 +154,19 @@ resource "aws_db_instance" "secondary" {
   vpc_security_group_ids = [var.security_group_id]
   parameter_group_name   = aws_db_parameter_group.postgres.name
 
-  multi_az               = var.multi_az
-  publicly_accessible    = false
+  multi_az                = var.multi_az
+  publicly_accessible     = false
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "tue:04:00-tue:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "tue:04:00-tue:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  
+
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-postgres-secondary-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   deletion_protection = true
-  
+
   auto_minor_version_upgrade = true
 
   tags = merge(
