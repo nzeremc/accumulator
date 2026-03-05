@@ -17,25 +17,30 @@ resource "aws_db_parameter_group" "postgres" {
   family      = "postgres${split(".", var.engine_version)[0]}"
   description = "PostgreSQL parameter group with logical replication enabled"
 
-  # Enable logical replication at infrastructure level
+  # Enable logical replication at infrastructure level (static parameter - requires reboot)
   parameter {
-    name  = "rds.logical_replication"
-    value = "1"
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+
+  # Dynamic parameters (can be applied immediately)
+  parameter {
+    name         = "max_replication_slots"
+    value        = "10"
+    apply_method = "immediate"
   }
 
   parameter {
-    name  = "max_replication_slots"
-    value = "10"
+    name         = "max_wal_senders"
+    value        = "10"
+    apply_method = "immediate"
   }
 
   parameter {
-    name  = "max_wal_senders"
-    value = "10"
-  }
-
-  parameter {
-    name  = "wal_sender_timeout"
-    value = "0"
+    name         = "wal_sender_timeout"
+    value        = "0"
+    apply_method = "immediate"
   }
 
   tags = merge(

@@ -82,6 +82,10 @@ resource "aws_lb_listener" "https" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # If no certificate, forward HTTP traffic directly
@@ -94,5 +98,9 @@ resource "aws_lb_listener" "http_forward" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
