@@ -17,7 +17,7 @@ private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 # Note: Password is auto-generated and stored in AWS Secrets Manager
 rds_instance_class          = "db.t3.micro"  # Free tier: db.t2.micro or db.t3.micro, Production: db.t3.large or higher
 rds_allocated_storage       = 20             # Free tier: max 20GB, Production: increase as needed
-rds_engine_version          = "15.4"
+rds_engine_version          = "15.7"         # Use major.minor format (15.7, 14.12, 13.15, etc.)
 rds_database_name           = "docmp"
 rds_master_username         = "docmp_admin"
 rds_backup_retention_period = 0              # Set to 0 for free tier testing, increase for production (1-35 days)
