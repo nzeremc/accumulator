@@ -1,0 +1,109 @@
+name: 'Terraform Destroy Infrastructure'
+
+# This workflow is ONLY triggered manually
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "destroy" to confirm infrastructure destruction'
+        required: true
+        type: string
+
+env:
+  TF_VERSION: 'latest'
+
+jobs:
+  destroy:
+    name: 'Destroy Infrastructure'
+    runs-on: ubuntu-latest
+    environment:
+      name: destroy-production
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+
+    steps:
+    # Validate confirmation input
+    - name: Validate Confirmation
+      run: |
+        if [ "${{ github.event.inputs.confirmation }}" != "destroy" ]; then
+          echo "❌ Confirmation failed. You must type 'destroy' to proceed."
+          exit 1
+        fi
+        echo "✅ Confirmation validated"
+
+    # Checkout the repository
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Extract configuration from terraform.tfvars
+    - name: Extract Terraform Variables
+      id: tfvars
+      run: |
+        if [ -f "terraform.tfvars" ]; then
+          AWS_REGION=$(grep 'aws_region' terraform.tfvars | cut -d'"' -f2)
+          TF_STATE_BUCKET=$(grep 'terraform_state_bucket' terraform.tfvars | cut -d'"' -f2)
+          echo "aws_region=$AWS_REGION" >> $GITHUB_OUTPUT
+          echo "tf_state_bucket=$TF_STATE_BUCKET" >> $GITHUB_OUTPUT
+          echo "✅ Extracted: Region=$AWS_REGION, Bucket=$TF_STATE_BUCKET"
+        else
+          echo "❌ terraform.tfvars not found!"
+          exit 1
+        fi
+
+    # Configure AWS credentials
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ steps.tfvars.outputs.aws_region }}
+
+    # Install Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    # Initialize Terraform
+    - name: Terraform Init
+      run: |
+        terraform init \
+          -backend-config="bucket=${{ steps.tfvars.outputs.tf_state_bucket }}" \
+          -backend-config="key=docmp/terraform.tfstate" \
+          -backend-config="region=${{ steps.tfvars.outputs.aws_region }}" \
+          -backend-config="encrypt=true"
+
+    # Show what will be destroyed
+    - name: Terraform Plan Destroy
+      run: terraform plan -destroy -var-file="terraform.tfvars" -out=destroy.tfplan
+
+    # Upload destroy plan for review
+    - name: Upload Destroy Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: destroy-plan
+        path: destroy.tfplan
+        retention-days: 5
+
+    # Destroy infrastructure (requires manual approval via environment protection)
+    - name: Terraform Destroy
+      run: terraform apply -auto-approve destroy.tfplan
+
+    # Show final message
+    - name: Destruction Complete
+      run: |
+        echo "=========================================="
+        echo "✅ Infrastructure destroyed successfully!"
+        echo "=========================================="
+        echo ""
+        echo "Note: The following may need manual cleanup:"
+        echo "  - S3 backend bucket (contains Terraform state)"
+        echo "  - CloudWatch log groups (may have retention)"
+        echo "  - Secrets in Secrets Manager (have recovery window)"
+        echo ""
+
+# Made with Bob
