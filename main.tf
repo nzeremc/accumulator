@@ -176,9 +176,9 @@ module "ecs" {
   db_secondary_host  = module.rds.secondary_instance_address
   db_port            = module.rds.database_port
   db_name            = module.rds.database_name
-  db_secret_arn      = module.rds.db_secret_arn
+  db_secret_arn      = nonsensitive(module.rds.db_secret_arn)
   redis_host         = module.redis.primary_endpoint_address
-  redis_secret_arn   = module.redis.auth_token_secret_arn
+  redis_secret_arn   = nonsensitive(module.redis.auth_token_secret_arn)
   kafka_brokers      = module.msk.bootstrap_brokers_tls
   health_check_path  = var.alb_health_check_path
 
@@ -207,7 +207,7 @@ resource "aws_ecs_task_definition" "db_init" {
       environment = [
         {
           name  = "DB_SECRET_ARN"
-          value = module.rds.db_secret_arn
+          value = nonsensitive(module.rds.db_secret_arn)
         },
         {
           name  = "S3_BUCKET"
