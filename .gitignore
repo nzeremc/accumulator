@@ -13,6 +13,10 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# Exception: Allow terraform.tfvars to be committed (contains no sensitive data)
+# All sensitive values are auto-generated or in AWS Secrets Manager
+!terraform.tfvars
+
 # Ignore override files as they are usually used to override resources locally
 override.tf
 override.tf.json
