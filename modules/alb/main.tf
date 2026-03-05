@@ -52,7 +52,9 @@ resource "aws_lb_target_group" "main" {
 }
 
 # HTTP Listener (redirects to HTTPS)
+# HTTP Listener - redirects to HTTPS (only when certificate exists)
 resource "aws_lb_listener" "http" {
+  count             = var.certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
@@ -66,10 +68,13 @@ resource "aws_lb_listener" "http" {
       status_code = "HTTP_301"
     }
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # HTTPS Listener (requires SSL certificate)
-# Note: You need to provide an SSL certificate ARN or create one
 resource "aws_lb_listener" "https" {
   count             = var.certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
@@ -88,7 +93,7 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# If no certificate, forward HTTP traffic directly
+# HTTP Listener - forward directly (only when no certificate)
 resource "aws_lb_listener" "http_forward" {
   count             = var.certificate_arn == "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
