@@ -8,6 +8,16 @@ locals {
     },
     var.additional_tags
   )
+
+  # Conditionally use networking module outputs or existing VPC details
+  vpc_id                        = var.create_networking ? module.networking[0].vpc_id : var.existing_vpc_id
+  private_subnet_ids            = var.create_networking ? module.networking[0].private_subnet_ids : var.existing_private_subnet_ids
+  public_subnet_ids             = var.create_networking ? module.networking[0].public_subnet_ids : var.existing_public_subnet_ids
+  rds_security_group_id         = var.create_networking ? module.networking[0].rds_security_group_id : var.existing_rds_security_group_id
+  msk_security_group_id         = var.create_networking ? module.networking[0].msk_security_group_id : var.existing_msk_security_group_id
+  redis_security_group_id       = var.create_networking ? module.networking[0].redis_security_group_id : var.existing_redis_security_group_id
+  alb_security_group_id         = var.create_networking ? module.networking[0].alb_security_group_id : var.existing_alb_security_group_id
+  ecs_tasks_security_group_id   = var.create_networking ? module.networking[0].ecs_tasks_security_group_id : var.existing_ecs_tasks_security_group_id
 }
 
 # Generate random password for RDS
@@ -42,8 +52,9 @@ resource "aws_secretsmanager_secret_version" "rds_master_password" {
   }
 }
 
-# Networking Module
+# Networking Module (conditionally created)
 module "networking" {
+  count  = var.create_networking ? 1 : 0
   source = "./modules/networking"
 
   project_name         = var.project_name
@@ -89,8 +100,8 @@ module "rds" {
   master_password         = random_password.rds_master_password.result
   backup_retention_period = var.rds_backup_retention_period
   multi_az                = var.rds_multi_az
-  private_subnet_ids      = module.networking.private_subnet_ids
-  security_group_id       = module.networking.rds_security_group_id
+  private_subnet_ids      = local.private_subnet_ids
+  security_group_id       = local.rds_security_group_id
 
   tags = local.common_tags
 }
@@ -115,8 +126,8 @@ module "msk" {
   instance_type          = var.msk_instance_type
   number_of_broker_nodes = var.msk_number_of_broker_nodes
   ebs_volume_size        = var.msk_ebs_volume_size
-  private_subnet_ids     = module.networking.private_subnet_ids
-  security_group_id      = module.networking.msk_security_group_id
+  private_subnet_ids     = local.private_subnet_ids
+  security_group_id      = local.msk_security_group_id
 
   tags = local.common_tags
 }
@@ -130,8 +141,8 @@ module "redis" {
   node_type              = var.redis_node_type
   num_cache_nodes        = var.redis_num_cache_nodes
   parameter_group_family = var.redis_parameter_group_family
-  private_subnet_ids     = module.networking.private_subnet_ids
-  security_group_id      = module.networking.redis_security_group_id
+  private_subnet_ids     = local.private_subnet_ids
+  security_group_id      = local.redis_security_group_id
 
   tags = local.common_tags
 }
@@ -141,9 +152,9 @@ module "alb" {
   source = "./modules/alb"
 
   project_name          = var.project_name
-  vpc_id                = module.networking.vpc_id
-  public_subnet_ids     = module.networking.public_subnet_ids
-  security_group_id     = module.networking.alb_security_group_id
+  vpc_id                = local.vpc_id
+  public_subnet_ids     = local.public_subnet_ids
+  security_group_id     = local.alb_security_group_id
   container_port        = var.ecs_container_port
   health_check_path     = var.alb_health_check_path
   health_check_interval = var.alb_health_check_interval
@@ -168,8 +179,8 @@ module "ecs" {
   container_port     = var.ecs_container_port
   execution_role_arn = module.iam.ecs_task_execution_role_arn
   task_role_arn      = module.iam.ecs_task_role_arn
-  private_subnet_ids = module.networking.private_subnet_ids
-  security_group_id  = module.networking.ecs_tasks_security_group_id
+  private_subnet_ids = local.private_subnet_ids
+  security_group_id  = local.ecs_tasks_security_group_id
   target_group_arn   = module.alb.target_group_arn
   alb_listener_arn   = module.alb.http_listener_arn
   db_primary_host    = module.rds.primary_instance_address
@@ -275,7 +286,7 @@ resource "null_resource" "db_init_trigger" {
         --cluster ${module.ecs.cluster_name} \
         --task-definition ${aws_ecs_task_definition.db_init[0].family} \
         --launch-type FARGATE \
-        --network-configuration "awsvpcConfiguration={subnets=[${join(",", module.networking.private_subnet_ids)}],securityGroups=[${module.networking.ecs_tasks_security_group_id}],assignPublicIp=DISABLED}" \
+          --network-configuration "awsvpcConfiguration={subnets=[${join(",", local.private_subnet_ids)}],securityGroups=[${local.ecs_tasks_security_group_id}],assignPublicIp=DISABLED}" \
         --region ${var.aws_region}
     EOT
   }

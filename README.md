@@ -6,7 +6,7 @@ Complete AWS infrastructure automation for the DOCMP system using Terraform and 
 
 The infrastructure includes:
 
-- **Networking**: VPC with public and private subnets across multiple availability zones
+- **Networking**: VPC with public and private subnets across multiple availability zones (supports both managed and bring-your-own-VPC modes)
 - **Application Load Balancer**: For distributing traffic to ECS services
 - **PostgreSQL (Active-Active)**: Two RDS PostgreSQL instances with logical replication enabled at infrastructure level
 - **MSK (Kafka)**: Managed Kafka cluster for messaging

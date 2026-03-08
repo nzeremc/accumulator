@@ -20,24 +20,83 @@ variable "terraform_state_bucket" {
 }
 
 # Networking Configuration
+variable "create_networking" {
+  description = "Toggle to create networking resources (true) or use existing VPC (false)"
+  type        = bool
+  default     = true
+}
+
 variable "vpc_cidr" {
-  description = "CIDR block for VPC"
+  description = "CIDR block for VPC (only used when create_networking is true)"
   type        = string
+  default     = ""
 }
 
 variable "availability_zones" {
-  description = "List of availability zones"
+  description = "List of availability zones (only used when create_networking is true)"
   type        = list(string)
+  default     = []
 }
 
 variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
+  description = "CIDR blocks for public subnets (only used when create_networking is true)"
   type        = list(string)
+  default     = []
 }
 
 variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
+  description = "CIDR blocks for private subnets (only used when create_networking is true)"
   type        = list(string)
+  default     = []
+}
+
+# Existing VPC Configuration (used when create_networking is false)
+variable "existing_vpc_id" {
+  description = "ID of existing VPC (required when create_networking is false)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_private_subnet_ids" {
+  description = "List of existing private subnet IDs (required when create_networking is false)"
+  type        = list(string)
+  default     = []
+}
+
+variable "existing_public_subnet_ids" {
+  description = "List of existing public subnet IDs (required when create_networking is false)"
+  type        = list(string)
+  default     = []
+}
+
+variable "existing_rds_security_group_id" {
+  description = "ID of existing RDS security group (required when create_networking is false)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_msk_security_group_id" {
+  description = "ID of existing MSK security group (required when create_networking is false)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_redis_security_group_id" {
+  description = "ID of existing Redis security group (required when create_networking is false)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_alb_security_group_id" {
+  description = "ID of existing ALB security group (required when create_networking is false)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_ecs_tasks_security_group_id" {
+  description = "ID of existing ECS tasks security group (required when create_networking is false)"
+  type        = string
+  default     = ""
 }
 
 # RDS PostgreSQL Configuration

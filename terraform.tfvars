@@ -8,10 +8,25 @@ environment  = "production"
 terraform_state_bucket = "docmp-terraform-state-2101"
 
 # Networking Configuration
+# Toggle between creating new networking resources or using existing VPC
+create_networking = true # Set to false to use existing VPC details below
+
+# Configuration for creating new networking resources (used when create_networking = true)
 vpc_cidr             = "10.0.0.0/16"
 availability_zones   = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
+
+# Configuration for using existing VPC (used when create_networking = false)
+# Uncomment and provide values when using existing VPC
+# existing_vpc_id                        = "vpc-xxxxxxxxxxxxxxxxx"
+# existing_private_subnet_ids            = ["subnet-xxxxxxxxxxxxxxxxx", "subnet-yyyyyyyyyyyyyyyyy", "subnet-zzzzzzzzzzzzzzzzz"]
+# existing_public_subnet_ids             = ["subnet-aaaaaaaaaaaaaaaa", "subnet-bbbbbbbbbbbbbbbbb", "subnet-ccccccccccccccccc"]
+# existing_rds_security_group_id         = "sg-xxxxxxxxxxxxxxxxx"
+# existing_msk_security_group_id         = "sg-yyyyyyyyyyyyyyyyy"
+# existing_redis_security_group_id       = "sg-zzzzzzzzzzzzzzzzz"
+# existing_alb_security_group_id         = "sg-aaaaaaaaaaaaaaaa"
+# existing_ecs_tasks_security_group_id   = "sg-bbbbbbbbbbbbbbbbb"
 
 # RDS PostgreSQL Configuration (Active-Active Infrastructure)
 # Note: Password is auto-generated and stored in AWS Secrets Manager
