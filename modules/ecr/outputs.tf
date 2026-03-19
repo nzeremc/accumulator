@@ -27,3 +27,18 @@ output "db_init_repository_name" {
   description = "Name of the DB init ECR repository"
   value       = aws_ecr_repository.db_init.name
 }
+
+output "pgactive_repository_url" {
+  description = "URL of the PGActive ECR repository"
+  value       = aws_ecr_repository.pgactive.repository_url
+}
+
+output "pgactive_repository_arn" {
+  description = "ARN of the PGActive ECR repository"
+  value       = aws_ecr_repository.pgactive.arn
+}
+
+output "pgactive_repository_name" {
+  description = "Name of the PGActive ECR repository"
+  value       = aws_ecr_repository.pgactive.name
+}

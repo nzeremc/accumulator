@@ -82,4 +82,3 @@ EOF
 
 echo "Database initialization completed successfully!"
 
-# Made with Bob

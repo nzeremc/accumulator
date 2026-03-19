@@ -28,6 +28,11 @@ variable "container_port" {
   type        = number
 }
 
+variable "aws_region" {
+  description = "AWS region for VPC endpoints"
+  type        = string
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

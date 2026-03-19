@@ -1,3 +1,12 @@
+# Get current AWS partition for GovCloud compatibility
+data "aws_partition" "current" {}
+
+# Get current AWS region
+data "aws_region" "current" {}
+
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
 # ECS Service-Linked Role
 # Reference the existing service-linked role (created automatically by AWS)
 # If it doesn't exist, AWS will create it automatically when ECS service is created
@@ -33,7 +42,7 @@ resource "aws_iam_role" "ecs_task_execution" {
 # Attach AWS managed policy for ECS task execution
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 # Additional policy for ECS task execution to access S3
@@ -142,7 +151,7 @@ resource "aws_iam_role_policy" "ecs_task_logs" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
       }
     ]
   })
@@ -230,7 +239,7 @@ resource "aws_iam_role_policy" "db_init_task_logs" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
       }
     ]
   })

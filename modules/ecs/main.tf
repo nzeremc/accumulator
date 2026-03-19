@@ -124,6 +124,163 @@ resource "aws_ecs_task_definition" "app" {
   )
 }
 
+# CloudWatch Log Group for DB Init
+resource "aws_cloudwatch_log_group" "db_init" {
+  name              = "/ecs/${var.project_name}/db-init"
+  retention_in_days = 7
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-db-init-logs"
+    }
+  )
+}
+
+# ECS Task Definition for DB Initialization (docmp_tables.sql)
+resource "aws_ecs_task_definition" "db_init" {
+  family                   = "${var.project_name}-db-init"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = var.execution_role_arn
+  task_role_arn            = var.task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "db-init"
+      image     = var.db_init_image
+      essential = true
+
+      environment = [
+        {
+          name  = "DB_SECRET_ARN"
+          value = var.db_secret_arn
+        },
+        {
+          name  = "S3_BUCKET"
+          value = var.s3_bucket_name
+        },
+        {
+          name  = "SQL_SCRIPT_KEY"
+          value = "init/schema.sql"
+        },
+        {
+          name  = "STATIC_DATA_PREFIX"
+          value = "static-data/"
+        },
+        {
+          name  = "AWS_DEFAULT_REGION"
+          value = var.aws_region
+        }
+      ]
+
+      command = ["/bin/bash", "/scripts/db-init.sh"]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.db_init.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "db-init"
+        }
+      }
+    }
+  ])
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-db-init-task"
+    }
+  )
+}
+
+# CloudWatch Log Group for PGActive
+resource "aws_cloudwatch_log_group" "pgactive" {
+  name              = "/ecs/${var.project_name}/pgactive"
+  retention_in_days = 7
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-pgactive-logs"
+    }
+  )
+}
+
+# ECS Task Definition for PGActive (Replication Setup)
+resource "aws_ecs_task_definition" "pgactive" {
+  family                   = "${var.project_name}-pgactive"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = var.execution_role_arn
+  task_role_arn            = var.task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "pgactive"
+      image     = var.pgactive_image
+      essential = true
+
+      environment = [
+        {
+          name  = "DB_PRIMARY_HOST"
+          value = var.db_primary_host
+        },
+        {
+          name  = "DB_SECONDARY_HOST"
+          value = var.db_secondary_host
+        },
+        {
+          name  = "DB_PORT"
+          value = tostring(var.db_port)
+        },
+        {
+          name  = "DB_NAME"
+          value = var.db_name
+        },
+        {
+          name  = "AWS_DEFAULT_REGION"
+          value = var.aws_region
+        }
+      ]
+
+      secrets = [
+        {
+          name      = "DB_USERNAME"
+          valueFrom = format("%s:username::", var.db_secret_arn)
+        },
+        {
+          name      = "DB_PASSWORD"
+          valueFrom = format("%s:password::", var.db_secret_arn)
+        }
+      ]
+
+      command = ["/bin/bash", "/scripts/pgactive-setup.sh"]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.pgactive.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "pgactive"
+        }
+      }
+    }
+  ])
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-pgactive-task"
+    }
+  )
+}
+
 # ECS Service
 resource "aws_ecs_service" "app" {
   name            = "${var.project_name}-service"

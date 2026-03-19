@@ -1,0 +1,21 @@
+FROM postgres:15-alpine
+
+# Install required tools
+RUN apk add --no-cache \
+    bash \
+    aws-cli \
+    jq \
+    curl
+
+# Copy the pgactive setup script
+COPY pgactive-setup.sh /scripts/pgactive-setup.sh
+
+# Make script executable
+RUN chmod +x /scripts/pgactive-setup.sh
+
+# Set working directory
+WORKDIR /scripts
+
+# Run the setup script
+CMD ["/bin/bash", "/scripts/pgactive-setup.sh"]
+

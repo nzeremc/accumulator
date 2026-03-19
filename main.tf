@@ -10,14 +10,14 @@ locals {
   )
 
   # Conditionally use networking module outputs or existing VPC details
-  vpc_id                        = var.create_networking ? module.networking[0].vpc_id : var.existing_vpc_id
-  private_subnet_ids            = var.create_networking ? module.networking[0].private_subnet_ids : var.existing_private_subnet_ids
-  public_subnet_ids             = var.create_networking ? module.networking[0].public_subnet_ids : var.existing_public_subnet_ids
-  rds_security_group_id         = var.create_networking ? module.networking[0].rds_security_group_id : var.existing_rds_security_group_id
-  msk_security_group_id         = var.create_networking ? module.networking[0].msk_security_group_id : var.existing_msk_security_group_id
-  redis_security_group_id       = var.create_networking ? module.networking[0].redis_security_group_id : var.existing_redis_security_group_id
-  alb_security_group_id         = var.create_networking ? module.networking[0].alb_security_group_id : var.existing_alb_security_group_id
-  ecs_tasks_security_group_id   = var.create_networking ? module.networking[0].ecs_tasks_security_group_id : var.existing_ecs_tasks_security_group_id
+  vpc_id                      = var.create_networking ? module.networking[0].vpc_id : var.existing_vpc_id
+  private_subnet_ids          = var.create_networking ? module.networking[0].private_subnet_ids : var.existing_private_subnet_ids
+  public_subnet_ids           = var.create_networking ? module.networking[0].public_subnet_ids : var.existing_public_subnet_ids
+  rds_security_group_id       = var.create_networking ? module.networking[0].rds_security_group_id : var.existing_rds_security_group_id
+  msk_security_group_id       = var.create_networking ? module.networking[0].msk_security_group_id : var.existing_msk_security_group_id
+  redis_security_group_id     = var.create_networking ? module.networking[0].redis_security_group_id : var.existing_redis_security_group_id
+  alb_security_group_id       = var.create_networking ? module.networking[0].alb_security_group_id : var.existing_alb_security_group_id
+  ecs_tasks_security_group_id = var.create_networking ? module.networking[0].ecs_tasks_security_group_id : var.existing_ecs_tasks_security_group_id
 }
 
 # Generate random password for RDS
@@ -63,6 +63,7 @@ module "networking" {
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
   container_port       = var.ecs_container_port
+  aws_region           = var.aws_region
 
   tags = local.common_tags
 }
@@ -192,108 +193,11 @@ module "ecs" {
   redis_secret_arn   = nonsensitive(module.redis.auth_token_secret_arn)
   kafka_brokers      = module.msk.bootstrap_brokers_tls
   health_check_path  = var.alb_health_check_path
+  db_init_image      = "${module.ecr.db_init_repository_url}:latest"
+  pgactive_image     = "${module.ecr.pgactive_repository_url}:latest"
+  s3_bucket_name     = module.s3.bucket_name
 
   tags = local.common_tags
 
   depends_on = [module.rds, module.redis, module.msk]
-}
-
-# Database Initialization Task Definition
-resource "aws_ecs_task_definition" "db_init" {
-  count                    = var.enable_db_initialization ? 1 : 0
-  family                   = "${var.project_name}-db-init"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = module.iam.ecs_task_execution_role_arn
-  task_role_arn            = module.iam.db_init_task_role_arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "db-init"
-      image     = "${module.ecr.db_init_repository_url}:latest"
-      essential = true
-
-      environment = [
-        {
-          name  = "DB_SECRET_ARN"
-          value = nonsensitive(module.rds.db_secret_arn)
-        },
-        {
-          name  = "S3_BUCKET"
-          value = module.s3.bucket_name
-        },
-        {
-          name  = "SQL_SCRIPT_KEY"
-          value = var.db_init_script_s3_key
-        },
-        {
-          name  = "STATIC_DATA_PREFIX"
-          value = var.db_init_static_files_prefix
-        },
-        {
-          name  = "AWS_DEFAULT_REGION"
-          value = var.aws_region
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/${var.project_name}/db-init"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "db-init"
-        }
-      }
-    }
-  ])
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${var.project_name}-db-init-task"
-    }
-  )
-}
-
-# CloudWatch Log Group for DB Init
-resource "aws_cloudwatch_log_group" "db_init" {
-  count             = var.enable_db_initialization ? 1 : 0
-  name              = "/ecs/${var.project_name}/db-init"
-  retention_in_days = 7
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${var.project_name}-db-init-logs"
-    }
-  )
-}
-
-# Null resource to trigger DB initialization (one-time)
-resource "null_resource" "db_init_trigger" {
-  count = var.enable_db_initialization ? 1 : 0
-
-  triggers = {
-    # This will only run once when the resource is created
-    db_init_task_definition = aws_ecs_task_definition.db_init[0].arn
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      aws ecs run-task \
-        --cluster ${module.ecs.cluster_name} \
-        --task-definition ${aws_ecs_task_definition.db_init[0].family} \
-        --launch-type FARGATE \
-          --network-configuration "awsvpcConfiguration={subnets=[${join(",", local.private_subnet_ids)}],securityGroups=[${local.ecs_tasks_security_group_id}],assignPublicIp=DISABLED}" \
-        --region ${var.aws_region}
-    EOT
-  }
-
-  depends_on = [
-    module.ecs,
-    module.rds,
-    aws_ecs_task_definition.db_init
-  ]
 }

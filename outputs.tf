@@ -120,8 +120,18 @@ output "application_url" {
   value       = "http://${module.alb.alb_dns_name}"
 }
 
-# Database Initialization
-output "db_init_task_definition" {
+# ECS Task Definitions
+output "db_init_task_definition_arn" {
   description = "ARN of the database initialization task definition"
-  value       = var.enable_db_initialization ? aws_ecs_task_definition.db_init[0].arn : null
+  value       = module.ecs.db_init_task_definition_arn
+}
+
+output "pgactive_task_definition_arn" {
+  description = "ARN of the PGActive task definition"
+  value       = module.ecs.pgactive_task_definition_arn
+}
+
+output "ecr_pgactive_repository_url" {
+  description = "URL of the PGActive ECR repository"
+  value       = module.ecr.pgactive_repository_url
 }

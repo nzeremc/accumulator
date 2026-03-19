@@ -1,13 +1,17 @@
 name: 'Terraform Infrastructure Deployment'
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+        default: 'plan'
 
 env:
   TF_VERSION: 'latest'
@@ -62,7 +66,13 @@ jobs:
 
     - name: Terraform Plan
       id: plan
+      if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
       run: terraform plan -var-file="terraform.tfvars" -out=tfplan
+
+    - name: Terraform Destroy Plan
+      id: destroy-plan
+      if: github.event.inputs.action == 'destroy'
+      run: terraform plan -destroy -var-file="terraform.tfvars" -out=tfplan
 
     - name: Upload Terraform Plan
       uses: actions/upload-artifact@v4
@@ -72,15 +82,19 @@ jobs:
         retention-days: 5
 
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      if: github.event.inputs.action == 'apply'
       run: terraform apply -auto-approve tfplan
 
+    - name: Terraform Destroy
+      if: github.event.inputs.action == 'destroy'
+      run: terraform destroy -auto-approve -var-file="terraform.tfvars"
+
     - name: Terraform Output
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      if: github.event.inputs.action == 'apply'
       run: terraform output -json > terraform-outputs.json
 
     - name: Upload Terraform Outputs
-      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      if: github.event.inputs.action == 'apply'
       uses: actions/upload-artifact@v4
       with:
         name: terraform-outputs
@@ -91,7 +105,7 @@ jobs:
     name: 'Build DB Init Docker Image'
     runs-on: ubuntu-latest
     needs: terraform
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.event.inputs.action == 'apply'
     
     steps:
     - name: Checkout
@@ -128,4 +142,43 @@ jobs:
         docker build -f Dockerfile.db-init -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-# Made with Bob
+  build-pgactive-image:
+    name: 'Build PGActive Docker Image'
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.event.inputs.action == 'apply'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Extract Terraform Variables
+      id: tfvars
+      run: |
+        AWS_REGION=$(grep 'aws_region' terraform.tfvars | cut -d'"' -f2)
+        PROJECT_NAME=$(grep 'project_name' terraform.tfvars | cut -d'"' -f2)
+        echo "aws_region=$AWS_REGION" >> $GITHUB_OUTPUT
+        echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+        echo "✅ Extracted: Region=$AWS_REGION, Project=$PROJECT_NAME"
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ steps.tfvars.outputs.aws_region }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push PGActive image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ steps.tfvars.outputs.project_name }}-pgactive
+        IMAGE_TAG: latest
+      run: |
+        cd scripts
+        docker build -f Dockerfile.pgactive -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+

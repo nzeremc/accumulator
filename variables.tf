@@ -203,25 +203,6 @@ variable "ecs_container_port" {
   default     = 8080
 }
 
-# Database Initialization Configuration
-variable "db_init_script_s3_key" {
-  description = "S3 key for database initialization SQL script"
-  type        = string
-  default     = "init/schema.sql"
-}
-
-variable "db_init_static_files_prefix" {
-  description = "S3 prefix for static data files"
-  type        = string
-  default     = "static-data/"
-}
-
-variable "enable_db_initialization" {
-  description = "Enable one-time database initialization"
-  type        = bool
-  default     = true
-}
-
 # Load Balancer Configuration
 variable "alb_health_check_path" {
   description = "Health check path for ALB target group"

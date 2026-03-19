@@ -116,3 +116,18 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "db_init_image" {
+  description = "Docker image for DB initialization task"
+  type        = string
+}
+
+variable "pgactive_image" {
+  description = "Docker image for PGActive replication setup task"
+  type        = string
+}
+
+variable "s3_bucket_name" {
+  description = "S3 bucket name containing SQL scripts and data files"
+  type        = string
+}

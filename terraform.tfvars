@@ -30,13 +30,13 @@ private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 
 # RDS PostgreSQL Configuration (Active-Active Infrastructure)
 # Note: Password is auto-generated and stored in AWS Secrets Manager
-rds_instance_class          = "db.t3.micro"  # Free tier: db.t2.micro or db.t3.micro, Production: db.t3.large or higher
-rds_allocated_storage       = 20             # Free tier: max 20GB, Production: increase as needed
-rds_engine_version          = "18.3"         # Version available in ap-south-1 region
+rds_instance_class          = "db.t3.micro" # Free tier: db.t2.micro or db.t3.micro, Production: db.t3.large or higher
+rds_allocated_storage       = 20            # Free tier: max 20GB, Production: increase as needed
+rds_engine_version          = "18.3"        # Version available in ap-south-1 region
 rds_database_name           = "docmp"
 rds_master_username         = "docmp_admin"
-rds_backup_retention_period = 0              # Set to 0 for free tier testing, increase for production (1-35 days)
-rds_multi_az                = false          # Free tier: false, Production: true for high availability
+rds_backup_retention_period = 0     # Set to 0 for free tier testing, increase for production (1-35 days)
+rds_multi_az                = false # Free tier: false, Production: true for high availability
 
 # MSK (Kafka) Configuration
 msk_instance_type          = "kafka.m5.large"
@@ -57,11 +57,6 @@ ecs_desired_count  = 2
 ecs_container_port = 8080
 # Note: ECR repositories are created automatically by Terraform
 # Container images will use: <account-id>.dkr.ecr.<region>.amazonaws.com/docmp-app:latest
-
-# Database Initialization Configuration
-db_init_script_s3_key       = "init/schema.sql"
-db_init_static_files_prefix = "static-data/"
-enable_db_initialization    = true
 
 # Load Balancer Configuration
 alb_health_check_path     = "/health"
