@@ -192,3 +192,101 @@ resource "aws_db_instance" "secondary" {
 # CloudWatch Log Groups
 # CloudWatch log groups are automatically created by RDS when enabled_cloudwatch_logs_exports is set
 # No need to explicitly create them as resources
+
+# SQL script for Pending Updates Table
+locals {
+  pending_updates_table_sql = <<-SQL
+    -- Pending Updates Table for visibility gap management
+    -- This table tracks in-flight transactions when Redis is unavailable
+    CREATE TABLE IF NOT EXISTS pending_updates (
+      id BIGSERIAL PRIMARY KEY,
+      transaction_id UUID NOT NULL UNIQUE,
+      entity_type VARCHAR(100) NOT NULL,
+      entity_id VARCHAR(255) NOT NULL,
+      operation VARCHAR(20) NOT NULL CHECK (operation IN ('CREATE', 'UPDATE', 'DELETE')),
+      payload JSONB NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+      kafka_topic VARCHAR(255) NOT NULL,
+      kafka_partition INTEGER,
+      kafka_offset BIGINT,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMP WITH TIME ZONE,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT,
+      metadata JSONB
+    );
+
+    -- Indexes for efficient querying
+    CREATE INDEX IF NOT EXISTS idx_pending_updates_transaction_id ON pending_updates(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_updates_entity ON pending_updates(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_updates_status ON pending_updates(status);
+    CREATE INDEX IF NOT EXISTS idx_pending_updates_created_at ON pending_updates(created_at);
+    CREATE INDEX IF NOT EXISTS idx_pending_updates_kafka_offset ON pending_updates(kafka_topic, kafka_partition, kafka_offset);
+
+    -- Trigger to update updated_at timestamp
+    CREATE OR REPLACE FUNCTION update_pending_updates_timestamp()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = CURRENT_TIMESTAMP;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER trigger_update_pending_updates_timestamp
+    BEFORE UPDATE ON pending_updates
+    FOR EACH ROW
+    EXECUTE FUNCTION update_pending_updates_timestamp();
+
+    -- Function to clean up old completed records (older than 7 days)
+    CREATE OR REPLACE FUNCTION cleanup_old_pending_updates()
+    RETURNS INTEGER AS $$
+    DECLARE
+      deleted_count INTEGER;
+    BEGIN
+      DELETE FROM pending_updates
+      WHERE status = 'COMPLETED'
+        AND completed_at < CURRENT_TIMESTAMP - INTERVAL '7 days';
+      GET DIAGNOSTICS deleted_count = ROW_COUNT;
+      RETURN deleted_count;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Create a view for monitoring pending transactions
+    CREATE OR REPLACE VIEW v_pending_updates_summary AS
+    SELECT
+      status,
+      entity_type,
+      COUNT(*) as count,
+      MIN(created_at) as oldest_transaction,
+      MAX(created_at) as newest_transaction,
+      AVG(retry_count) as avg_retry_count
+    FROM pending_updates
+    WHERE status IN ('PENDING', 'PROCESSING')
+    GROUP BY status, entity_type;
+
+    COMMENT ON TABLE pending_updates IS 'Tracks in-flight transactions for visibility gap management when Redis is unavailable';
+    COMMENT ON COLUMN pending_updates.transaction_id IS 'Unique identifier for the transaction';
+    COMMENT ON COLUMN pending_updates.entity_type IS 'Type of entity being modified (e.g., user, order, etc.)';
+    COMMENT ON COLUMN pending_updates.entity_id IS 'ID of the entity being modified';
+    COMMENT ON COLUMN pending_updates.operation IS 'Type of operation: CREATE, UPDATE, or DELETE';
+    COMMENT ON COLUMN pending_updates.payload IS 'JSON payload of the transaction';
+    COMMENT ON COLUMN pending_updates.kafka_topic IS 'Kafka topic where the message was published';
+    COMMENT ON COLUMN pending_updates.kafka_offset IS 'Kafka offset for tracking message position';
+  SQL
+}
+
+# Store the SQL script in S3 for initialization
+resource "aws_s3_object" "pending_updates_table_sql" {
+  bucket  = var.s3_bucket_name
+  key     = "init/pending_updates_table.sql"
+  content = local.pending_updates_table_sql
+
+  tags = merge(
+    var.tags,
+    {
+      Name        = "${var.project_name}-pending-updates-table-sql"
+      Description = "SQL script for creating pending updates table"
+    }
+  )
+}

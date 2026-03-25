@@ -1,358 +1,498 @@
-# DOCMP AWS Infrastructure Automation
+# DOCMP Active-Active Distributed System
 
-Complete AWS infrastructure automation for the DOCMP system using Terraform and GitHub Actions.
+Complete AWS infrastructure for an Active-Active distributed system with API Gateway, Kafka buffering, Redis caching, and PostgreSQL replication.
 
-## 🏗️ Architecture Overview
+## 🏗️ System Architecture
 
-The infrastructure includes:
+```
+Client → API Gateway → VPC Link → ALB → ECS Fargate (FastAPI App)
+                                           ↓
+                                    ┌──────┴──────┐
+                                    ↓             ↓
+                              Kafka (MSK)    Redis Cache
+                              (System         (Regional
+                               Memory)         Memory)
+                                    ↓             ↓
+                            Pending Updates   Database
+                                Table         (RDS PostgreSQL)
+                            (Visibility Gap)  (Active-Active)
+```
 
-- **Networking**: VPC with public and private subnets across multiple availability zones (supports both managed and bring-your-own-VPC modes)
-- **Application Load Balancer**: For distributing traffic to ECS services
-- **PostgreSQL (Active-Active)**: Two RDS PostgreSQL instances with logical replication enabled at infrastructure level
-- **MSK (Kafka)**: Managed Kafka cluster for messaging
-- **Redis**: ElastiCache cluster with high availability
-- **ECS**: Fargate-based container orchestration
-- **S3**: Storage for SQL scripts and static data files
-- **IAM**: Roles and policies for secure access
+### Key Components
+
+1. **API Gateway** - Request entry point with rate limiting and WAF protection
+2. **Application Load Balancer** - Traffic distribution to ECS tasks
+3. **ECS Fargate** - Serverless container runtime for the API application
+4. **MSK (Kafka)** - System "memory" for transaction buffering and cross-region sync
+5. **Redis (ElastiCache)** - Regional memory for ultra-low latency reads
+6. **RDS PostgreSQL** - Active-Active database (source of truth)
+7. **Pending Updates Table** - Visibility gap solution when Redis is unavailable
 
 ## 📋 Prerequisites
 
 - AWS Account with appropriate permissions
+- Existing VPC and subnets (specified in requirements)
+- Existing database credentials in Secrets Manager: `dev/docmp/db`
 - Terraform >= 1.0
 - AWS CLI configured
-- GitHub repository for CI/CD
-- Docker (for building DB initialization image)
+- Docker (for building application images)
 
 ## 🚀 Quick Start
 
-### 1. Clone the Repository
+### 1. Configure Existing Infrastructure
+
+Edit `terraform.tfvars` with your existing VPC details:
+
+```hcl
+# Use existing VPC (already configured)
+create_networking = false
+existing_vpc_id = "vpc-0bb67cf591eb840c2"
+existing_private_subnet_ids = [
+  "subnet-0acefeb6a9825fb5b",
+  "subnet-099ac7c0bf429081f",
+  "subnet-08d141bf2f954a835",
+  "subnet-06dfb8065d398498c"
+]
+```
+
+### 2. Initialize and Deploy
 
 ```bash
-git clone <repository-url>
-cd aws-tf
+# Initialize Terraform
+terraform init
+
+# Review changes
+terraform plan
+
+# Deploy infrastructure
+terraform apply
 ```
 
-### 2. Configure Backend (S3 State Storage)
+### 3. Build and Push Application
 
-**IMPORTANT**: Edit `provider.tf` and update the S3 backend configuration with your bucket name:
+```bash
+# Get ECR repository URL
+ECR_REPO=$(terraform output -raw ecr_app_repository_url)
+AWS_REGION=$(terraform output -raw aws_region)
 
-```hcl
-backend "s3" {
-  bucket  = "your-terraform-state-bucket-name"  # ⚠️ CHANGE THIS
-  key     = "docmp/terraform.tfstate"
-  region  = "your-aws-region"                   # ⚠️ CHANGE THIS
-  encrypt = true
-}
+# Login to ECR
+aws ecr get-login-password --region ${AWS_REGION} | \
+  docker login --username AWS --password-stdin ${ECR_REPO}
+
+# Build and push application
+cd app
+docker build -t docmp-app:latest .
+docker tag docmp-app:latest ${ECR_REPO}:latest
+docker push ${ECR_REPO}:latest
 ```
 
-**Example**:
-```hcl
-backend "s3" {
-  bucket  = "docmp-terraform-state-2101"
-  key     = "docmp/terraform.tfstate"
-  region  = "ap-south-1"
-  encrypt = true
-}
+### 4. Initialize Database
+
+```bash
+# Run database initialization task
+aws ecs run-task \
+  --cluster $(terraform output -raw ecs_cluster_name) \
+  --task-definition docmp-db-init \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[...],securityGroups=[...]}"
 ```
 
-### 3. Configure Variables
+## 📁 Project Structure
 
-Edit `terraform.tfvars` with your specific values:
+```
+aws-tf/
+├── main.tf                          # Root module - integrates all components
+├── variables.tf                     # Variable definitions
+├── outputs.tf                       # Output definitions
+├── provider.tf                      # AWS provider configuration
+├── terraform.tfvars                 # Your configuration (VPC, subnets, etc.)
+│
+├── modules/                         # Terraform modules
+│   ├── api_gateway/                 # ✨ NEW: API Gateway with VPC Link
+│   │   ├── main.tf                  # API Gateway, WAF, rate limiting
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── alb/                         # Application Load Balancer
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── ecs/                         # ECS Fargate cluster and services
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── rds/                         # PostgreSQL Active-Active
+│   │   ├── main.tf                  # ✨ UPDATED: Includes Pending Updates Table SQL
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── redis/                       # Redis with Global Datastore
+│   │   ├── main.tf                  # ✨ UPDATED: Global Datastore support
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── msk/                         # Kafka cluster
+│   │   ├── main.tf                  # ✨ UPDATED: Cross-region mirroring config
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── iam/                         # IAM roles and policies
+│   │   ├── main.tf                  # ✨ UPDATED: MSK and Redis permissions
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── federated_role.tf
+│   │
+│   ├── ecr/                         # Container registries
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   ├── s3/                          # S3 bucket for data
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   │
+│   └── networking/                  # VPC, subnets, security groups
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── vpc_endpoints.tf
+│
+├── app/                             # ✨ NEW: FastAPI Application
+│   ├── main.py                      # API application (378 lines)
+│   ├── requirements.txt             # Python dependencies
+│   └── Dockerfile                   # Container definition
+│
+├── scripts/                         # Database initialization scripts
+│   ├── db-init.sh                   # Database initialization script
+│   ├── Dockerfile.db-init           # DB init container
+│   ├── pgactive-setup.sh            # Active-Active replication setup
+│   ├── Dockerfile.pgactive          # PGActive container
+│   └── schema.sql.example           # Example schema
+│
+├── data-files/                      # Database data files
+│   ├── init/
+│   │   ├── README.md                # Instructions for schema files
+│   │   └── schema.sql               # Your database schema
+│   └── static-data/
+│       ├── README.md                # Instructions for static data
+│       └── *.csv                    # CSV files for data loading
+│
+└── .github/
+    └── workflows/
+        └── terraform.yml            # CI/CD pipeline
+```
+
+## 🔧 Configuration
+
+### Required Configuration in terraform.tfvars
 
 ```hcl
-# General Configuration
-aws_region   = "ap-south-1"  # Must match backend region
+# General
+aws_region   = "ap-south-1"
 project_name = "docmp"
 environment  = "production"
 
-# Terraform Backend
-terraform_state_bucket = "docmp-terraform-state-2101"  # Must match backend bucket
+# Existing VPC (REQUIRED)
+create_networking = false
+existing_vpc_id = "vpc-0bb67cf591eb840c2"
+existing_private_subnet_ids = [
+  "subnet-0acefeb6a9825fb5b",
+  "subnet-099ac7c0bf429081f",
+  "subnet-08d141bf2f954a835",
+  "subnet-06dfb8065d398498c"
+]
+existing_public_subnet_ids = [
+  "subnet-0acefeb6a9825fb5b",
+  "subnet-099ac7c0bf429081f"
+]
 
-# Networking
-vpc_cidr             = "10.0.0.0/16"
-availability_zones   = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
-public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
+# Security Groups (REQUIRED)
+existing_rds_security_group_id       = "sg-0473a57c1f7399590"
+existing_msk_security_group_id       = "sg-0d4d549ec46711a91"
+existing_redis_security_group_id     = "sg-0d4a77df4ebf43fa2"
+existing_alb_security_group_id       = "sg-0e2fc451c79b07905"
+existing_ecs_tasks_security_group_id = "sg-0473a57c1f7399590"
 
-# RDS Configuration (password auto-generated)
-rds_instance_class    = "db.t3.large"
-rds_allocated_storage = 100
+# Database (uses existing credentials from Secrets Manager: dev/docmp/db)
+rds_instance_class    = "db.t3.micro"    # Dev: db.t3.micro, Prod: db.t3.large+
+rds_allocated_storage = 20               # GB
+rds_database_name     = "docmp"
 rds_master_username   = "docmp_admin"
 
-# ... (see terraform.tfvars.example for all options)
+# Kafka
+msk_instance_type          = "kafka.m5.large"
+msk_number_of_broker_nodes = 3
+
+# Redis
+redis_node_type       = "cache.t3.medium"
+redis_num_cache_nodes = 2
+
+# ECS
+ecs_task_cpu      = "1024"  # 1 vCPU
+ecs_task_memory   = "2048"  # 2 GB
+ecs_desired_count = 2       # Number of tasks
 ```
 
-**Note**: RDS password is auto-generated and stored in AWS Secrets Manager. No need to provide it manually.
+## 🎯 Key Features
 
-### 4. Initialize Terraform
+### 1. API Gateway with Request Buffering
+- **Location:** `modules/api_gateway/`
+- Rate limiting: 10,000 requests/second, 5,000 burst
+- WAF protection: 2,000 requests per 5 minutes per IP
+- IAM authentication
+- CloudWatch logging and X-Ray tracing
 
+### 2. Kafka System Memory
+- **Location:** `modules/msk/`
+- All POST/PUT requests immediately buffered to Kafka
+- Cross-region mirroring support
+- Compression enabled (snappy)
+- 3 brokers across 3 availability zones
+
+### 3. Redis Regional Memory
+- **Location:** `modules/redis/`
+- Ultra-low latency reads (< 5ms)
+- Global Datastore support for Active-Active across regions
+- Multi-AZ with automatic failover
+- TLS encryption and AUTH token
+
+### 4. Pending Updates Table
+- **Location:** `modules/rds/main.tf` (SQL schema)
+- Tracks in-flight transactions when Redis is unavailable
+- Bridges visibility gap for immediate GET requests
+- Automatic cleanup of old records (7 days)
+- 6 indexes for performance
+
+### 5. Three-Tier Read Strategy
+- **Location:** `app/main.py`
+- **Tier 1:** Redis cache (fastest, < 5ms)
+- **Tier 2:** Pending Updates Table (< 20ms)
+- **Tier 3:** Main database (< 50ms)
+
+### 6. Active-Active Database
+- **Location:** `modules/rds/`
+- Two PostgreSQL instances with logical replication
+- Bidirectional sync via pgactive
+- Existing credentials: `dev/docmp/db` (Secrets Manager)
+
+## 📡 API Endpoints
+
+The FastAPI application (`app/main.py`) provides:
+
+### Write Operations
 ```bash
-terraform init
+# Create/Update entity (POST)
+POST /api/update
+{
+  "entity_type": "user",
+  "entity_id": "user123",
+  "operation": "CREATE",
+  "payload": { "name": "John", "email": "john@example.com" }
+}
+
+# Update entity (PUT)
+PUT /api/update/{entity_id}
+{
+  "entity_type": "user",
+  "entity_id": "user123",
+  "operation": "UPDATE",
+  "payload": { "name": "John Doe" }
+}
 ```
 
-### 4. Plan Infrastructure
-
+### Read Operations
 ```bash
-terraform plan -var-file="terraform.tfvars"
+# Get entity (checks Redis → Pending Updates → Database)
+GET /api/entity/{entity_type}/{entity_id}
 ```
 
-### 5. Apply Infrastructure
-
+### Health Check
 ```bash
-terraform apply -var-file="terraform.tfvars"
+# Health check (for ALB)
+GET /health
 ```
 
-## 🔄 CI/CD with GitHub Actions
+## 🔐 Security
 
-### Setup GitHub Secrets
+- **Encryption at Rest:** All data stores (RDS, MSK, Redis, S3)
+- **Encryption in Transit:** TLS 1.2+ for all connections
+- **IAM Authentication:** API Gateway, MSK
+- **Secrets Manager:** Database and Redis credentials
+- **VPC Isolation:** All resources in private subnets
+- **Security Groups:** Least privilege access
+- **WAF:** Rate limiting and IP filtering
 
-Configure only **2 secrets** in your GitHub repository (Settings → Secrets and variables → Actions):
+## 📊 Monitoring
 
-- `AWS_ACCESS_KEY_ID`: Your AWS IAM access key ID
-- `AWS_SECRET_ACCESS_KEY`: Your AWS IAM secret access key
+### CloudWatch Logs
+- **API Gateway:** `/aws/apigateway/docmp`
+- **ECS Application:** `/ecs/docmp`
+- **Database Init:** `/ecs/docmp/db-init`
+- **PGActive:** `/ecs/docmp/pgactive`
+- **MSK:** `/aws/msk/docmp`
+- **Redis:** `/aws/elasticache/docmp/slow-log`, `/aws/elasticache/docmp/engine-log`
 
-**Note**: All other configuration (region, S3 bucket, etc.) is in `terraform.tfvars` and `provider.tf`.
+### Key Metrics
+- API Gateway: Request count, latency, errors
+- ECS: CPU, memory, task count
+- Kafka: Message throughput, consumer lag
+- Redis: Cache hit rate, memory usage
+- RDS: CPU, connections, replication lag
 
-See [GITHUB-SECRETS-SIMPLIFIED.md](GITHUB-SECRETS-SIMPLIFIED.md) for detailed setup instructions.
+## 🚨 Important Notes
 
-### Workflow
+### 1. Redis Global Datastore (Two-Stage Deployment)
+The Redis Global Datastore requires a two-stage deployment:
 
-The GitHub Actions workflow automatically:
+**Stage 1:** Initial deployment
+```hcl
+# In terraform.tfvars
+# Leave enable_global_datastore commented out or set to false
+```
 
-1. Reads configuration from `terraform.tfvars`
-2. Validates Terraform configuration
-2. Plans infrastructure changes
-3. Applies changes on push to main branch
-4. Builds and pushes DB initialization Docker image
-5. Triggers one-time database initialization
+**Stage 2:** Enable Global Datastore
+```hcl
+# In modules/redis/variables.tf, set:
+enable_global_datastore = true
+```
+Then run `terraform apply` again.
 
-## 📊 Database Initialization
+### 2. Database Credentials
+Uses existing credentials from Secrets Manager: `dev/docmp/db`
 
-### How It Works
+### 3. Pending Updates Table
+The SQL schema is automatically stored in S3 during deployment:
+- **Location:** `s3://{bucket}/init/pending_updates_table.sql`
+- **Source:** `modules/rds/main.tf` (lines 195-280)
 
-1. Infrastructure is provisioned via Terraform
-2. PostgreSQL instances are created with the DOCMP database
-3. A one-time ECS task runs automatically
-4. The task:
-   - Fetches SQL script from S3
-   - Executes schema creation
-   - Loads static data files from S3
-   - Marks initialization as complete
+### 4. Application Deployment
+After infrastructure deployment:
+1. Build Docker image from `app/`
+2. Push to ECR
+3. ECS will automatically deploy the application
 
-### Preparing Database Files
+## 🔄 Data Flow
 
-#### 1. SQL Schema Script
+### Write Path (POST/PUT)
+1. Client → API Gateway (rate limiting, WAF)
+2. API Gateway → ALB → ECS Task
+3. ECS Task → Kafka (immediate, durable write)
+4. ECS Task → Redis (best-effort cache update)
+5. If Redis fails → Pending Updates Table
+6. Return 202 Accepted with transaction_id
+7. Kafka consumers → Database (async)
 
-Create your schema script and upload to S3:
+### Read Path (GET)
+1. Client → API Gateway → ALB → ECS Task
+2. Check Redis cache (< 5ms)
+   - If found → Return (X-Cache: HIT)
+3. Check Pending Updates Table (< 20ms)
+   - If found → Return (X-Source: PENDING)
+4. Query main database (< 50ms)
+   - If found → Return (X-Source: DATABASE)
+5. If not found → 404
 
+## 🛠️ Troubleshooting
+
+### ECS Tasks Not Starting
 ```bash
-aws s3 cp schema.sql s3://your-bucket-name/init/schema.sql
+# Check logs
+aws logs tail /ecs/docmp --follow
+
+# Check task status
+aws ecs describe-tasks --cluster docmp-cluster --tasks <task-id>
 ```
 
-Example `schema.sql`:
-
-```sql
--- Create schemas
-CREATE SCHEMA IF NOT EXISTS app;
-CREATE SCHEMA IF NOT EXISTS audit;
-
--- Create tables
-CREATE TABLE app.users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(100) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Add more tables as needed
-```
-
-#### 2. Static Data Files
-
-Upload CSV files to S3:
-
+### Redis Connection Issues
 ```bash
-aws s3 cp countries.csv s3://your-bucket-name/static-data/countries.csv
-aws s3 cp categories.csv s3://your-bucket-name/static-data/categories.csv
+# Verify Redis cluster
+aws elasticache describe-replication-groups --replication-group-id docmp-redis
+
+# Check security group
+aws ec2 describe-security-groups --group-ids sg-0d4a77df4ebf43fa2
 ```
 
-CSV files should have headers matching table column names.
-
-### Re-running Initialization
-
-The initialization task checks for completion status. To re-run:
-
-1. Connect to the database
-2. Delete or update the `db_init_status` table
-3. Manually trigger the ECS task:
-
+### Kafka Connection Issues
 ```bash
-aws ecs run-task \
-  --cluster docmp-cluster \
-  --task-definition docmp-db-init \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx]}"
+# Verify MSK cluster
+aws kafka describe-cluster --cluster-arn <cluster-arn>
+
+# Check bootstrap brokers
+aws kafka get-bootstrap-brokers --cluster-arn <cluster-arn>
 ```
-
-## 🔧 Configuration Reference
-
-### Key Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `aws_region` | AWS region for resources | - |
-| `project_name` | Project name for resource naming | - |
-| `vpc_cidr` | CIDR block for VPC | - |
-| `rds_instance_class` | RDS instance type | - |
-| `msk_instance_type` | MSK broker instance type | - |
-| `redis_node_type` | Redis node type | - |
-| `ecs_task_cpu` | CPU units for ECS tasks | - |
-| `ecs_task_memory` | Memory for ECS tasks (MB) | - |
-
-See `variables.tf` for complete list.
-
-## 📦 Module Structure
-
-```
-.
-├── main.tf                      # Root module
-├── variables.tf                 # Variable definitions
-├── outputs.tf                   # Output definitions
-├── provider.tf                  # Provider configuration
-├── terraform.tfvars.example     # Example variables
-├── modules/
-│   ├── networking/              # VPC, subnets, security groups
-│   ├── alb/                     # Application Load Balancer
-│   ├── rds/                     # PostgreSQL databases
-│   ├── msk/                     # Kafka cluster
-│   ├── redis/                   # Redis cluster
-│   ├── ecs/                     # ECS cluster and services
-│   ├── s3/                      # S3 bucket
-│   └── iam/                     # IAM roles and policies
-├── scripts/
-│   ├── db-init.sh               # Database initialization script
-│   └── Dockerfile.db-init       # Docker image for DB init
-└── .github/
-    └── workflows/
-        └── terraform.yml        # CI/CD pipeline
-```
-
-## 🔐 Security Considerations
-
-- All sensitive data stored in AWS Secrets Manager
-- Security groups follow least privilege principle
-- Encryption at rest enabled for all data stores
-- Encryption in transit enabled (TLS)
-- Private subnets for databases and application servers
-- No public access to databases
-
-## 📈 Monitoring and Logging
-
-- CloudWatch Logs enabled for:
-  - ECS tasks
-  - RDS PostgreSQL
-  - MSK brokers
-  - Redis
-- Container Insights enabled for ECS
-- Log retention: 7 days (configurable)
-
-## 🔄 PostgreSQL Active-Active Setup
-
-### Infrastructure Level
-
-Terraform provisions:
-- Two independent PostgreSQL instances
-- Logical replication enabled via parameter group
-- Both instances in different availability zones
-- Separate endpoints for each instance
-
-### What's NOT Included
-
-- Replication slot configuration
-- Publication/subscription setup
-- pgactive installation
-- Application-level failover logic
-
-These must be configured separately after infrastructure deployment.
-
-## 🛠️ Maintenance
-
-### Updating Infrastructure
-
-1. Modify `terraform.tfvars`
-2. Run `terraform plan` to review changes
-3. Run `terraform apply` to apply changes
-
-### Scaling
-
-Adjust these variables in `terraform.tfvars`:
-
-- `ecs_desired_count`: Number of ECS tasks
-- `rds_instance_class`: Database instance size
-- `msk_number_of_broker_nodes`: Kafka broker count
-- `redis_num_cache_nodes`: Redis node count
-
-### Backup and Recovery
-
-- RDS automated backups: 7 days retention (configurable)
-- Point-in-time recovery enabled
-- S3 versioning enabled for scripts and data
-
-## 🐛 Troubleshooting
 
 ### Database Connection Issues
-
 ```bash
-# Check security groups
-aws ec2 describe-security-groups --group-ids sg-xxx
-
-# Test connectivity from ECS task
+# Test from ECS task
 aws ecs execute-command --cluster docmp-cluster \
-  --task task-id \
+  --task <task-id> \
   --container docmp-container \
   --interactive \
   --command "/bin/bash"
+
+# Then inside container:
+psql -h <db-endpoint> -U docmp_admin -d docmp
 ```
 
-### ECS Task Failures
+## 📈 Scaling
 
+### Horizontal Scaling
 ```bash
-# View logs
-aws logs tail /ecs/docmp --follow
-
-# Describe task
-aws ecs describe-tasks --cluster docmp-cluster --tasks task-id
+# Update ECS desired count
+aws ecs update-service \
+  --cluster docmp-cluster \
+  --service docmp-service \
+  --desired-count 4
 ```
 
-### Terraform State Issues
+### Vertical Scaling
+Edit `terraform.tfvars`:
+```hcl
+# Increase task resources
+ecs_task_cpu = "2048"     # 2 vCPU
+ecs_task_memory = "4096"  # 4 GB
 
-```bash
-# Refresh state
-terraform refresh
+# Increase database
+rds_instance_class = "db.t3.large"
 
-# Import existing resource
-terraform import module.rds.aws_db_instance.primary db-instance-id
+# Increase Redis
+redis_node_type = "cache.t3.large"
 ```
 
-## 📝 Important Notes
+Then apply: `terraform apply`
 
-1. **One-Time Initialization**: Database initialization runs only once. The script checks for completion status.
+## 💰 Cost Optimization
 
-2. **No Replication Configuration**: PostgreSQL replication must be configured manually after infrastructure deployment.
+### Development Environment
+- RDS: db.t3.micro, single-AZ
+- Redis: cache.t3.micro, 1 node
+- MSK: kafka.t3.small, 2 brokers
+- ECS: 1 task
+- **Estimated:** $200-300/month
 
-3. **Single Environment**: This setup is for a single environment. For multiple environments, duplicate the configuration with different tfvars files.
-
-4. **Cost Optimization**: Review instance sizes and adjust based on actual usage.
-
-5. **SSL Certificates**: Add SSL certificate ARN to enable HTTPS on ALB.
+### Production Environment
+- RDS: db.t3.large, Multi-AZ
+- Redis: cache.t3.medium, 2 nodes, Global Datastore
+- MSK: kafka.m5.large, 3 brokers
+- ECS: 2-6 tasks (auto-scaling)
+- **Estimated:** $800-1200/month (single region)
 
 ## 📞 Support
 
-For issues or questions, refer to the documentation files in this repository.
+For issues or questions:
+1. Check CloudWatch logs for errors
+2. Review security group configurations
+3. Verify IAM permissions
+4. Check Secrets Manager for credentials
 
-## 🔗 Additional Resources
+## 🔗 Resources
 
-- [Terraform AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [AWS ECS Best Practices](https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/)
 - [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 - [MSK Documentation](https://docs.aws.amazon.com/msk/)
+- [Redis Global Datastore](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/Redis-Global-Datastore.html)

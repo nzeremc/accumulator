@@ -103,6 +103,7 @@ module "rds" {
   multi_az                = var.rds_multi_az
   private_subnet_ids      = local.private_subnet_ids
   security_group_id       = local.rds_security_group_id
+  s3_bucket_name          = module.s3.bucket_name
 
   tags = local.common_tags
 }
@@ -165,6 +166,23 @@ module "alb" {
   certificate_arn       = "" # Add SSL certificate ARN if available
 
   tags = local.common_tags
+}
+
+# API Gateway Module
+module "api_gateway" {
+  source = "./modules/api_gateway"
+
+  project_name           = var.project_name
+  alb_arn                = module.alb.alb_arn
+  alb_dns_name           = module.alb.alb_dns_name
+  stage_name             = var.environment
+  throttling_burst_limit = 5000
+  throttling_rate_limit  = 10000
+  waf_rate_limit         = 2000
+
+  tags = local.common_tags
+
+  depends_on = [module.alb]
 }
 
 # ECS Module

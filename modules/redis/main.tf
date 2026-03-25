@@ -85,8 +85,23 @@ resource "aws_elasticache_replication_group" "main" {
     var.tags,
     {
       Name = "${var.project_name}-redis-cluster"
+      Role = var.enable_global_datastore ? "Primary-Ready" : "Standalone"
     }
   )
+}
+
+# ElastiCache Global Datastore (for Active-Active across regions)
+# Note: This must be created AFTER the replication group exists
+# To enable: Set enable_global_datastore = true and apply in two stages
+resource "aws_elasticache_global_replication_group" "main" {
+  count = var.enable_global_datastore ? 1 : 0
+
+  global_replication_group_id_suffix = "${var.project_name}-global"
+  primary_replication_group_id       = aws_elasticache_replication_group.main.id
+
+  global_replication_group_description = "Global datastore for ${var.project_name} Active-Active Redis"
+
+  depends_on = [aws_elasticache_replication_group.main]
 }
 
 # Random password for Redis AUTH

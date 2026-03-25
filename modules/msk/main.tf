@@ -1,4 +1,4 @@
-# MSK Configuration
+# MSK Configuration with Cross-Region Mirroring Support
 resource "aws_msk_configuration" "main" {
   name              = "${var.project_name}-msk-config"
   kafka_versions    = [var.kafka_version]
@@ -15,9 +15,18 @@ socket.request.max.bytes=104857600
 socket.send.buffer.bytes=102400
 unclean.leader.election.enable=false
 zookeeper.session.timeout.ms=18000
+# Cross-region replication settings
+replica.fetch.max.bytes=1048576
+replica.socket.timeout.ms=30000
+replica.socket.receive.buffer.bytes=65536
+# Compression for cross-region efficiency
+compression.type=snappy
+# Topic configuration for mirroring
+log.retention.hours=168
+log.segment.bytes=1073741824
 PROPERTIES
 
-  description = "MSK configuration for ${var.project_name}"
+  description = "MSK configuration for ${var.project_name} with cross-region mirroring support"
 }
 
 # CloudWatch Log Group for MSK

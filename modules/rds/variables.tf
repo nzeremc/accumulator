@@ -63,3 +63,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "s3_bucket_name" {
+  description = "S3 bucket name for storing SQL scripts"
+  type        = string
+}

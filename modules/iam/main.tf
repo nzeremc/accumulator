@@ -157,6 +157,70 @@ resource "aws_iam_role_policy" "ecs_task_logs" {
   })
 }
 
+# Policy for ECS tasks to access MSK (Kafka)
+resource "aws_iam_role_policy" "ecs_task_msk" {
+  name_prefix = "${var.project_name}-ecs-task-msk-"
+  role        = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kafka-cluster:Connect",
+          "kafka-cluster:AlterCluster",
+          "kafka-cluster:DescribeCluster"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:kafka:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:cluster/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kafka-cluster:*Topic*",
+          "kafka-cluster:WriteData",
+          "kafka-cluster:ReadData"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:kafka:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:topic/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kafka-cluster:AlterGroup",
+          "kafka-cluster:DescribeGroup"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:kafka:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:group/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Policy for ECS tasks to access ElastiCache (Redis)
+resource "aws_iam_role_policy" "ecs_task_redis" {
+  name_prefix = "${var.project_name}-ecs-task-redis-"
+  role        = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticache:DescribeCacheClusters",
+          "elasticache:DescribeReplicationGroups"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # DB Initialization Task Role
 resource "aws_iam_role" "db_init_task" {
   name_prefix = "${var.project_name}-db-init-task-"

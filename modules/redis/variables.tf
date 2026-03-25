@@ -38,3 +38,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_global_datastore" {
+  description = "Enable Global Datastore for Active-Active Redis across regions"
+  type        = bool
+  default     = false
+}
